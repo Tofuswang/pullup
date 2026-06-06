@@ -20,6 +20,7 @@ The shared product idea is:
 | Top-level routing | `src/agent.ts` |
 | CommonGround member onboarding | `src/commonground.ts` |
 | Research-style recommender module | `src/commonground_recommender.ts` |
+| Methodology / privacy mapping | `src/commonground_methodology.ts` |
 | Host event / invite / RSVP flow | `src/agent.ts` |
 | Event domain types | `src/domain.ts` |
 | Specialist copy and status formatting | `src/agents/specialists.ts` |
@@ -302,6 +303,10 @@ The current code now represents the main methodology pieces at MVP-code level:
 | Pre-event brief / Context Card | `contextCard()` |
 | User + friends calendar overlap | Friend-labeled free-window parsing in `parseAvailabilityWindows()` and `findMutualSlots()` |
 | Feedback learning loop | `feedbackPrompt()` captures vibe feedback without person ratings |
+| Four-surface architecture | `productSurfaces` maps iOS app brain, iMessage, App Intents, and web fallback |
+| Minimum-permission path | `permissionLadder` defines current MVP permissions and native-app upgrade path |
+| Revocable consent ledger shape | `buildConsentLedgerEntry()` creates minimal consent records without raw data storage |
+| Meaningful second interaction metric | `scoreMeetingOutcomeFeedback()` scores attendance, natural conversation, future-interest, activity fit, mutual opt-in, and safety |
 
 Still not built as real production infrastructure:
 
@@ -310,7 +315,32 @@ Still not built as real production infrastructure:
 - native iOS EventKit calendar permissions
 - automatic access to friends' calendars
 - causal experimentation framework
-- real second-meeting outcome prediction
+- production analytics for real second-meeting outcome prediction
+
+## Native-App Architecture Boundary
+
+The latest product direction says CommonGround should feel like it lives in
+iMessage, but should be architected as a private planning system with an iOS app
+as the real assistant brain.
+
+Current repo boundary:
+
+- implemented: Spectrum/iMessage conversational MVP
+- implemented: manual local-calendar free-window sharing
+- implemented: Apple Maps URL handoff
+- implemented: privacy-safe Context Cards and vibe feedback
+- implemented: code-level architecture map in `src/commonground_methodology.ts`
+- planned native: EventKit write-only event creation
+- planned native: EventKit full-access conflict detection after explicit upgrade
+- planned native: CoreLocation / MapKit travel-time ranking
+- planned native: Contacts permission prompt
+- planned native: App Intents / Shortcuts
+- planned native: web fallback for friends without the app
+
+Product principle:
+
+> The bot can propose and explain. Calendar truth, location truth, and contact
+> access must come from explicit user permission or manual fallback.
 
 ## Mutual Confirmation
 
