@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildConsentLedgerEntry,
+  createDemoMeetingOutcomeMetricsPipeline,
   methodologyCoverage,
   permissionLadder,
   productSurfaces,
   scoreMeetingOutcomeFeedback,
+  summarizeMeetingOutcomeMetrics,
 } from "./commonground_methodology";
 
 describe("CommonGround methodology mapping", () => {
@@ -62,6 +64,64 @@ describe("CommonGround methodology mapping", () => {
     expect(score.meaningfulSecondInteractionSignal).toBe(true);
   });
 
+  test("records outcome metrics through the demo analytics and storage pipeline", () => {
+    const { store, analytics, pipeline } = createDemoMeetingOutcomeMetricsPipeline();
+    const recordedAt = new Date("2026-06-07T10:00:00+08:00");
+
+    const record = pipeline.record({
+      metricId: "msi_room_001_demo",
+      roomId: "room_001",
+      cohortId: "ntu_week_1",
+      participantIds: ["u_001", "u_002"],
+      recordedAt,
+      feedback: {
+        attended: true,
+        conversationFeltNatural: true,
+        wouldMeetSimilarPeopleAgain: true,
+        activityWasGoodContainer: true,
+        mutualOptInOccurred: false,
+        noSafetyIssue: true,
+      },
+    });
+
+    expect(record).toEqual({
+      id: "msi_room_001_demo",
+      roomId: "room_001",
+      cohortId: "ntu_week_1",
+      recordedAt: "2026-06-07T02:00:00.000Z",
+      participantCount: 2,
+      reward: 0.9,
+      meaningfulSecondInteractionSignal: true,
+      signalVersion: "demo_v1",
+      rawFeedbackStored: false,
+    });
+    expect(store.list()).toEqual([record]);
+    expect(analytics.list()).toEqual([
+      {
+        name: "meeting_outcome_scored",
+        metricId: record.id,
+        roomId: "room_001",
+        cohortId: "ntu_week_1",
+        reward: 0.9,
+        meaningfulSecondInteractionSignal: true,
+        recordedAt: "2026-06-07T02:00:00.000Z",
+      },
+    ]);
+    expect(pipeline.summary()).toEqual({
+      recordedRooms: 1,
+      meaningfulSecondInteractionRate: 1,
+      averageReward: 0.9,
+    });
+  });
+
+  test("summarizes empty outcome metrics without NaN values", () => {
+    expect(summarizeMeetingOutcomeMetrics([])).toEqual({
+      recordedRooms: 0,
+      meaningfulSecondInteractionRate: 0,
+      averageReward: 0,
+    });
+  });
+
   test("covers the attachment methodology at MVP or planned-native level", () => {
     const coverage = methodologyCoverage();
 
@@ -69,6 +129,7 @@ describe("CommonGround methodology mapping", () => {
     expect(coverage.map((item) => item.requirement).join(" ")).toContain("Four-surface architecture");
     expect(coverage.map((item) => item.requirement).join(" ")).toContain("Deterministic scheduling truth");
     expect(coverage.map((item) => item.requirement).join(" ")).toContain("meaningful second interaction");
+    expect(coverage.flatMap((item) => item.evidence)).toContain("MeetingOutcomeMetricsPipeline");
     expect(coverage.every((item) => item.evidence.length > 0)).toBe(true);
   });
 });

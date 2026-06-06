@@ -40,6 +40,52 @@ export type MeetingOutcomeScore = {
   meaningfulSecondInteractionSignal: boolean;
 };
 
+export type MeetingOutcomeMetricRecord = {
+  id: string;
+  roomId: string;
+  cohortId?: string;
+  recordedAt: string;
+  participantCount: number;
+  reward: number;
+  meaningfulSecondInteractionSignal: boolean;
+  signalVersion: "demo_v1";
+  rawFeedbackStored: false;
+};
+
+export type MeetingOutcomeAnalyticsEvent = {
+  name: "meeting_outcome_scored";
+  metricId: string;
+  roomId: string;
+  cohortId?: string;
+  reward: number;
+  meaningfulSecondInteractionSignal: boolean;
+  recordedAt: string;
+};
+
+export type MeetingOutcomeMetricStore = {
+  save(record: MeetingOutcomeMetricRecord): void;
+  list(): MeetingOutcomeMetricRecord[];
+};
+
+export type MeetingOutcomeAnalyticsSink = {
+  track(event: MeetingOutcomeAnalyticsEvent): void;
+};
+
+export type MeetingOutcomeMetricInput = {
+  metricId?: string;
+  roomId: string;
+  cohortId?: string;
+  participantIds: string[];
+  feedback: MeetingOutcomeFeedback;
+  recordedAt?: Date;
+};
+
+export type MeetingOutcomeMetricsSummary = {
+  recordedRooms: number;
+  meaningfulSecondInteractionRate: number;
+  averageReward: number;
+};
+
 export type MethodologyCoverageItem = {
   requirement: string;
   status: ImplementationStatus;
@@ -161,6 +207,105 @@ export function scoreMeetingOutcomeFeedback(
   };
 }
 
+export class DemoMeetingOutcomeMetricStore implements MeetingOutcomeMetricStore {
+  private readonly records = new Map<string, MeetingOutcomeMetricRecord>();
+
+  save(record: MeetingOutcomeMetricRecord): void {
+    this.records.set(record.id, record);
+  }
+
+  list(): MeetingOutcomeMetricRecord[] {
+    return [...this.records.values()].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+  }
+}
+
+export class DemoMeetingOutcomeAnalyticsSink implements MeetingOutcomeAnalyticsSink {
+  private readonly events: MeetingOutcomeAnalyticsEvent[] = [];
+
+  track(event: MeetingOutcomeAnalyticsEvent): void {
+    this.events.push(event);
+  }
+
+  list(): MeetingOutcomeAnalyticsEvent[] {
+    return [...this.events];
+  }
+}
+
+export class MeetingOutcomeMetricsPipeline {
+  constructor(
+    private readonly store: MeetingOutcomeMetricStore,
+    private readonly analytics: MeetingOutcomeAnalyticsSink,
+  ) {}
+
+  record(input: MeetingOutcomeMetricInput): MeetingOutcomeMetricRecord {
+    const score = scoreMeetingOutcomeFeedback(input.feedback);
+    const recordedAt = input.recordedAt ?? new Date();
+    const record: MeetingOutcomeMetricRecord = {
+      id: input.metricId ?? crypto.randomUUID(),
+      roomId: input.roomId,
+      cohortId: input.cohortId,
+      recordedAt: recordedAt.toISOString(),
+      participantCount: input.participantIds.length,
+      reward: score.reward,
+      meaningfulSecondInteractionSignal: score.meaningfulSecondInteractionSignal,
+      signalVersion: "demo_v1",
+      rawFeedbackStored: false,
+    };
+
+    this.store.save(record);
+    this.analytics.track({
+      name: "meeting_outcome_scored",
+      metricId: record.id,
+      roomId: record.roomId,
+      cohortId: record.cohortId,
+      reward: record.reward,
+      meaningfulSecondInteractionSignal: record.meaningfulSecondInteractionSignal,
+      recordedAt: record.recordedAt,
+    });
+
+    return record;
+  }
+
+  summary(): MeetingOutcomeMetricsSummary {
+    return summarizeMeetingOutcomeMetrics(this.store.list());
+  }
+}
+
+export function createDemoMeetingOutcomeMetricsPipeline(): {
+  store: DemoMeetingOutcomeMetricStore;
+  analytics: DemoMeetingOutcomeAnalyticsSink;
+  pipeline: MeetingOutcomeMetricsPipeline;
+} {
+  const store = new DemoMeetingOutcomeMetricStore();
+  const analytics = new DemoMeetingOutcomeAnalyticsSink();
+  return {
+    store,
+    analytics,
+    pipeline: new MeetingOutcomeMetricsPipeline(store, analytics),
+  };
+}
+
+export function summarizeMeetingOutcomeMetrics(
+  records: readonly MeetingOutcomeMetricRecord[],
+): MeetingOutcomeMetricsSummary {
+  if (records.length === 0) {
+    return {
+      recordedRooms: 0,
+      meaningfulSecondInteractionRate: 0,
+      averageReward: 0,
+    };
+  }
+
+  const signalCount = records.filter((record) => record.meaningfulSecondInteractionSignal).length;
+  const rewardTotal = records.reduce((total, record) => total + record.reward, 0);
+
+  return {
+    recordedRooms: records.length,
+    meaningfulSecondInteractionRate: roundMetric(signalCount / records.length),
+    averageReward: roundMetric(rewardTotal / records.length),
+  };
+}
+
 export function methodologyCoverage(): MethodologyCoverageItem[] {
   return [
     {
@@ -199,8 +344,17 @@ export function methodologyCoverage(): MethodologyCoverageItem[] {
     {
       requirement: "Measure meaningful second interaction instead of message volume",
       status: "implemented_mvp",
-      evidence: ["scoreMeetingOutcomeFeedback"],
-      gap: "No persistent analytics pipeline yet.",
+      evidence: [
+        "scoreMeetingOutcomeFeedback",
+        "MeetingOutcomeMetricsPipeline",
+        "DemoMeetingOutcomeMetricStore",
+        "DemoMeetingOutcomeAnalyticsSink",
+      ],
+      gap: "Demo-only in-memory metric store; production analytics warehouse and retention policy are still planned.",
     },
   ];
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 100) / 100;
 }
