@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CommonGround Tested Functions Demo Deck</title>
+  <style>
+    :root {
+      --paper: #f8f5ef;
+      --ink: #16211f;
+      --muted: #66736d;
+      --line: #d8ded6;
+      --sage: #6e8b75;
+      --sage-dark: #3f5f4b;
+      --coral: #d96c4f;
+      --gold: #c9a959;
+      --dark: #101816;
+      --white: #ffffff;
+      --mist: #e7ede5;
+      --sand: #f4e5d3;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #111; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+    body { overflow: hidden; }
+    .deck { width: 100vw; height: 100vh; position: relative; }
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      padding: 5.2vh 5vw;
+      display: none;
+      background: var(--paper);
+      position: absolute;
+      inset: 0;
+    }
+    .slide.active { display: block; }
+    .dark { background: var(--dark); color: var(--paper); }
+    .kicker { display: flex; align-items: center; gap: 14px; color: var(--sage-dark); font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .dark .kicker { color: var(--gold); }
+    .kicker::before { content: ""; width: 34px; height: 3px; background: var(--coral); display: inline-block; }
+    .dark .kicker::before { background: var(--gold); }
+    h1 { font-size: clamp(38px, 5.2vw, 68px); line-height: .98; letter-spacing: 0; margin: 4.5vh 0 0; max-width: 980px; }
+    h2 { font-size: clamp(30px, 3.4vw, 46px); line-height: 1.08; margin: 4vh 0 3vh; max-width: 980px; }
+    h3 { margin: 0 0 10px; font-size: 21px; }
+    p { font-size: 20px; line-height: 1.35; color: var(--muted); }
+    .dark p { color: #d9e4dc; }
+    .subtitle { max-width: 820px; margin-top: 30px; font-size: 24px; color: #dce7df; }
+    .footer { position: absolute; left: 5vw; right: 5vw; bottom: 3.5vh; display: flex; justify-content: space-between; color: #7b8781; font-size: 12px; }
+    .dark .footer { color: #8fa099; }
+    .grid { display: grid; gap: 22px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid.three { grid-template-columns: repeat(3, 1fr); }
+    .grid.four { grid-template-columns: repeat(4, 1fr); }
+    .card { background: var(--white); border: 1px solid var(--line); padding: 24px; min-height: 128px; }
+    .card.dark-card { background: var(--dark); color: var(--paper); border: 0; }
+    .card h3 { color: var(--ink); }
+    .card.dark-card h3 { color: var(--gold); }
+    .card p, .card li { font-size: 17px; line-height: 1.35; color: var(--muted); }
+    .card.dark-card p, .card.dark-card li { color: #d9e4dc; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+    .badge { background: var(--mist); color: var(--sage-dark); padding: 9px 14px; font-size: 13px; font-weight: 700; }
+    .badge.warn { background: var(--sand); color: #955d35; }
+    .metric-rail { position: absolute; right: 9vw; top: 20vh; border-left: 1px solid #46544f; padding-left: 42px; }
+    .metric { margin-bottom: 40px; }
+    .metric strong { display: block; color: var(--gold); font-size: 58px; line-height: 1; }
+    .metric span { color: #d9e4dc; font-size: 15px; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; margin-top: 50px; }
+    .step { border: 1px solid var(--line); background: var(--white); padding: 18px; min-height: 88px; position: relative; }
+    .step strong { display: block; font-size: 18px; margin-bottom: 9px; }
+    .step span { font-size: 14px; color: var(--muted); }
+    .step.hot { background: var(--sand); }
+    .list { margin: 0; padding-left: 20px; }
+    .list li { margin: 8px 0; font-size: 19px; line-height: 1.28; }
+    .code {
+      background: var(--dark);
+      color: #edf4ee;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 17px;
+      line-height: 1.45;
+      padding: 26px;
+      white-space: pre-wrap;
+      min-height: 180px;
+    }
+    .table { width: 100%; border-collapse: collapse; background: var(--white); border: 1px solid var(--line); }
+    .table th, .table td { text-align: left; border-bottom: 1px solid var(--line); padding: 15px 18px; font-size: 16px; vertical-align: top; }
+    .table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .pill { display: inline-block; padding: 6px 10px; font-size: 11px; font-weight: 700; background: var(--mist); color: var(--sage-dark); }
+    .bar { height: 11px; background: #dce2d9; margin: 7px 0 18px; position: relative; }
+    .bar i { display: block; height: 100%; background: var(--sage); }
+    .split { display: grid; grid-template-columns: 44% 56%; gap: 46px; align-items: start; }
+    .note { font-size: 15px; color: var(--muted); margin-top: 14px; }
+    .nav { position: fixed; right: 18px; bottom: 14px; z-index: 20; display: flex; gap: 8px; }
+    .nav button { background: #ffffffdd; border: 1px solid #ccc; color: #111; padding: 8px 11px; cursor: pointer; font-weight: 700; }
+    .progress { position: fixed; left: 0; bottom: 0; height: 4px; background: var(--coral); z-index: 21; width: 0; transition: width .15s ease; }
+    @media print {
+      body { overflow: visible; background: white; }
+      .deck { height: auto; }
+      .slide { display: block; position: relative; width: 100vw; height: 56.25vw; page-break-after: always; }
+      .nav, .progress { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <section class="slide dark active">
+      <div class="kicker">Tested Functions Only</div>
+      <h1>CommonGround demo deck based only on passing GitHub tests.</h1>
+      <p class="subtitle">Only behavior covered by the current automated test suite. No untested product claims.</p>
+      <div class="badge-row">
+        <span class="badge">CommonGround onboarding</span>
+        <span class="badge">Room recommender</span>
+        <span class="badge">Mutual slots</span>
+        <span class="badge">Host invites</span>
+        <span class="badge">RSVP</span>
+        <span class="badge warn">Native EventKit handoff required</span>
+      </div>
+      <aside class="metric-rail">
+        <div class="metric"><strong>39</strong><span>passing tests</span></div>
+        <div class="metric"><strong>6</strong><span>test files</span></div>
+        <div class="metric"><strong>0</strong><span>failures</span></div>
+      </aside>
+      <div class="footer"><span>Source: automated test suite run from current branch</span><span>01</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">CommonGround Flow</div>
+      <h2>The tested member flow goes from START to room confirmation and feedback.</h2>
+      <div class="flow">
+        <div class="step"><strong>START</strong><span>private CommonGround invitation</span></div>
+        <div class="step"><strong>CONSENT</strong><span>permissioned inputs explained</span></div>
+        <div class="step"><strong>LinkedIn URL</strong><span>true-person handle only</span></div>
+        <div class="step"><strong>AI Passport</strong><span>long self-summary accepted</span></div>
+        <div class="step"><strong>APPROVE</strong><span>redaction approval loop</span></div>
+        <div class="step"><strong>Preferences</strong><span>intent, budget, boundary, availability</span></div>
+        <div class="step hot"><strong>Room Drop</strong><span>people, activity, venue, context</span></div>
+        <div class="step"><strong>YES</strong><span>moves to availability</span></div>
+        <div class="step"><strong>Free windows</strong><span>iPhone Calendar handoff</span></div>
+        <div class="step"><strong>CONFIRM ROOM</strong><span>calendar-ready card + Maps link</span></div>
+        <div class="step"><strong>Feedback</strong><span>vibe tuning, not person rating</span></div>
+      </div>
+      <div class="footer"><span>Test: runs CommonGround onboarding from invite to room confirmation</span><span>02</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Verification Behavior</div>
+      <h2>LinkedIn is tested as verification only, never as an invite target.</h2>
+      <div class="grid three">
+        <div class="card">
+          <h3>URL accepted</h3>
+          <p>Valid LinkedIn profile URLs move the user to AI Passport onboarding.</p>
+        </div>
+        <div class="card">
+          <h3>Smart quotes accepted</h3>
+          <p>Curly quote pasted URLs still validate during onboarding.</p>
+        </div>
+        <div class="card">
+          <h3>No host draft</h3>
+          <p>A LinkedIn URL does not create a coffee invite, draft note, or guest target.</p>
+        </div>
+      </div>
+      <div class="grid two" style="margin-top: 34px;">
+        <div class="card dark-card">
+          <h3>Protocol ownership</h3>
+          <p>START and /start are tested to enter CommonGround without the host/invite agent chiming in.</p>
+        </div>
+        <div class="card">
+          <h3>What this proves</h3>
+          <p>The live demo can show identity boundary clearly: verification handle first, matching input later.</p>
+        </div>
+      </div>
+      <div class="footer"><span>Tests: LinkedIn URL verification, smart quotes, protocol-owned START</span><span>03</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Recommender</div>
+      <h2>The tested recommender parses Passport signals and returns a scored room.</h2>
+      <div class="split">
+        <div class="card">
+          <h3>Parsed signals</h3>
+          <ul class="list">
+            <li>Interests include AI and finance</li>
+            <li>Values include low-pressure</li>
+            <li>Boundaries include public venue</li>
+            <li>Embedding-ready text is retained</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Room output checks</h3>
+          <p>Automated tests verify a 3-person recommended room with positive dyadic, group, and experience scores.</p>
+          <div>Dyadic chemistry</div><div class="bar"><i style="width:74%"></i></div>
+          <div>Group dynamics</div><div class="bar"><i style="width:82%"></i></div>
+          <div>Experience fit</div><div class="bar"><i style="width:90%"></i></div>
+        </div>
+      </div>
+      <div class="footer"><span>Tests: parseResearchProfile(), recommendRoom()</span><span>04</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Mutual Time</div>
+      <h2>Mutual-slot logic is tested with user and friend availability windows.</h2>
+      <div class="grid two">
+        <div class="code">you: Thu 7:30 PM, Sat 3 PM
+Mina: Thu 7:30 PM
+Ethan: Thu 7:30 PM</div>
+        <div class="card">
+          <h3>Expected result</h3>
+          <ul class="list">
+            <li>Finds exactly one shared slot</li>
+            <li>Marks confidence as mutual</li>
+            <li>Returns participants: you, Mina, Ethan</li>
+          </ul>
+          <p class="note">The test uses free windows only, not event titles or private calendar details.</p>
+        </div>
+      </div>
+      <div class="footer"><span>Tests: parseAvailabilityWindows(), findMutualSlots()</span><span>05</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Local Calendar</div>
+      <h2>Calendar helpers are tested without pretending to read iPhone data silently.</h2>
+      <table class="table">
+        <thead><tr><th>Function</th><th>Tested behavior</th><th>Demo-safe wording</th></tr></thead>
+        <tbody>
+          <tr><td>Local instructions</td><td>Explains iPhone Calendar free-window sharing</td><td>User shares free windows manually</td></tr>
+          <tr><td>Availability parser</td><td>Parses "Thu 7:30 PM, Sat 3 PM"</td><td>Works for simple typed windows</td></tr>
+          <tr><td>Busy-block slots</td><td>Finds slots around busy blocks without event details</td><td>Free/busy logic, no titles</td></tr>
+          <tr><td>No-slot fallback</td><td>Returns graceful fallback copy</td><td>Can handle no clean shared window</td></tr>
+          <tr><td>Event creation</td><td>Requires native EventKit writer unless injected</td><td>No fake local calendar write</td></tr>
+        </tbody>
+      </table>
+      <div class="footer"><span>Tests: calendar helpers, native EventKit writer path</span><span>06</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Host Invite Flow</div>
+      <h2>The host side is tested from event intake to approval-gated sending.</h2>
+      <div class="grid four">
+        <div class="card"><h3>Brief intake</h3><p>Collects event fields and creates a draft.</p></div>
+        <div class="card"><h3>Draft approval</h3><p>/send is blocked until /approve.</p></div>
+        <div class="card"><h3>Queued invites</h3><p>Approved small-batch invites are queued.</p></div>
+        <div class="card"><h3>Status tracking</h3><p>Send failures are recorded and shown in status.</p></div>
+      </div>
+      <div class="grid two" style="margin-top: 34px;">
+        <div class="card dark-card"><h3>Location UX</h3><p>First coffee meetup message does not ask for typed city/neighborhood.</p></div>
+        <div class="card dark-card"><h3>iOS handoff</h3><p>When venue is missing, the agent asks for current/live location in Messages.</p></div>
+      </div>
+      <div class="footer"><span>Tests: event brief, approval gate, send queue, location handoff</span><span>07</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">RSVP And Safety</div>
+      <h2>Guest replies and invite safety policies are covered by tests.</h2>
+      <div class="grid three">
+        <div class="card">
+          <h3>Guest yes</h3>
+          <p>A matched guest phone replying "yes" updates RSVP status to confirmed.</p>
+        </div>
+        <div class="card">
+          <h3>Guest stop</h3>
+          <p>A guest texting "stop" opts out, and status shows the opt-out.</p>
+        </div>
+        <div class="card">
+          <h3>Target not allowed</h3>
+          <p>Send failures are recorded without crashing the batch.</p>
+        </div>
+      </div>
+      <table class="table" style="margin-top: 34px;">
+        <tbody>
+          <tr><td><span class="pill">Policy</span></td><td>Send is blocked before approval and allowed after approval.</td></tr>
+          <tr><td><span class="pill">Batching</span></td><td>Invite batch limit uses env value or falls back to 20.</td></tr>
+        </tbody>
+      </table>
+      <div class="footer"><span>Tests: guest RSVP, stop opt-out, target-not-allowed, send policies</span><span>08</span></div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">Venue And Memory</div>
+      <h2>Venue resolution, Chinese date/venue intake, and durable memory are tested.</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Venue candidate</h3>
+          <p>When a venue is provided, the maps adapter can return a place candidate with name, address, latitude, and longitude.</p>
+        </div>
+        <div class="card">
+          <h3>Chinese planning input</h3>
+          <p>The agent understands a Chinese date-planning message with date and venue, then stores those fields in the draft.</p>
+        </div>
+        <div class="card">
+          <h3>Durable memory packet</h3>
+          <p>Before LLM response, context includes event brief, guest summary, and recent messages.</p>
+        </div>
+        <div class="card">
+          <h3>Clear command</h3>
+          <p>/clear clears terminal output without resetting the active event draft.</p>
+        </div>
+      </div>
+      <div class="footer"><span>Tests: venue intake, Chinese date/venue, memory packet, clear</span><span>09</span></div>
+    </section>
+
+    <section class="slide dark">
+      <div class="kicker">Live Test Script</div>
+      <h2>Demo only the tested paths.</h2>
+      <div class="grid two">
+        <div class="code">cd /Users/vivian/Documents/Codex/2026-06-06/files-mentioned-by-the-user-pasted/outputs/pullup_merge
+~/.bun/bin/bun test
+PULLUP_SHOW_AGENT_TRACE=0 PULLUP_PROVIDERS=terminal ~/.bun/bin/bun src/index.ts</div>
+        <div class="code">START
+CONSENT
+https://www.linkedin.com/in/your-profile/
+[paste AI Passport]
+APPROVE
+[send preferences]
+YES
+you: Thu 7:30 PM; Mina: Thu 7:30 PM; Ethan: Thu 7:30 PM
+CONFIRM ROOM</div>
+      </div>
+      <p class="subtitle" style="font-size: 20px; max-width: 980px;">Do not demo untested claims: no silent iPhone Calendar read, no fake EventKit write, no LinkedIn scraping, no trained compatibility model.</p>
+      <div class="footer"><span>Final: tested functions deck only</span><span>10</span></div>
+    </section>
+  </main>
+
+  <div class="nav">
+    <button type="button" id="prev">Prev</button>
+    <button type="button" id="next">Next</button>
+  </div>
+  <div class="progress" id="progress"></div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    let index = 0;
+    const progress = document.getElementById("progress");
+    function show(nextIndex) {
+      index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+      slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+      progress.style.width = `${((index + 1) / slides.length) * 100}%`;
+    }
+    document.getElementById("prev").addEventListener("click", () => show(index - 1));
+    document.getElementById("next").addEventListener("click", () => show(index + 1));
+    document.addEventListener("keydown", (event) => {
+      if (["ArrowRight", "PageDown", " "].includes(event.key)) show(index + 1);
+      if (["ArrowLeft", "PageUp"].includes(event.key)) show(index - 1);
+      if (event.key === "Home") show(0);
+      if (event.key === "End") show(slides.length - 1);
+    });
+    show(0);
+  </script>
+</body>
+</html>

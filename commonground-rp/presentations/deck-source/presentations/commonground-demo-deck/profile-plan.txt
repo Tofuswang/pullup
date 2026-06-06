@@ -1,0 +1,22 @@
+Task mode: create
+Primary deck-profile: product-platform
+Secondary gates: engineering-platform for recommender architecture; strategy-leadership for hackathon pitch clarity
+Required proof objects:
+- product loop / user journey
+- architecture map from Spectrum/iMessage to CommonGround state machine and recommender
+- recommender pipeline with dyadic, group, experience fit signals
+- privacy/permission ladder
+- live demo script
+- current implementation vs planned-native boundary
+Brand authenticity constraints:
+- No invented logos. Use text-only CommonGround wordmark.
+- Photon/Spectrum appears as provider text only, not as a copied logo.
+- Use generic Lucide icons only when helpful.
+QA gates:
+- 10 slides, at least 5 layout families
+- each slide has claim + proof object
+- no more than 2 card-grid slides
+- claims reflect current GitHub code honestly; future work labeled as planned
+Known missing inputs:
+- no visual brand guide supplied
+- no production screenshots supplied

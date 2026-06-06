@@ -1,0 +1,10 @@
+01 Cover manifesto with implementation badges
+02 Left problem ladder + right product inversion
+03 Full-width state machine flow
+04 Three permissioned data layers
+05 Central recommender engine with score bars
+06 Context Card mock and privacy boundary rail
+07 Calendar/mutual-slot overlap diagram
+08 Repo architecture map
+09 MVP/planned-native methodology matrix
+10 Live demo script and next steps

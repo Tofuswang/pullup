@@ -1,0 +1,821 @@
+
+========================================================================================
+CommonGround
+========================================================================================
+CommonGround is not a matching score. It is a recommender system for designing the first hour.
+We do not recommend people. We recommend a room: the people, the activity, the venue, and the context.
+All values in this demo are first-pass product heuristics, not validated empirical coefficients.
+
+========================================================================================
+0. Photon iMessage Guided Onboarding
+========================================================================================
+{
+  "delivery_provider": "Photon Spectrum",
+  "primary_channel": "iMessage",
+  "purpose": "Guide the user from consent to a verified, user-approved matching profile. LinkedIn verifies real-person identity only; AI Passport and self input create the taste graph.",
+  "source": "https://photon.codes/",
+  "data_boundary": {
+    "linkedin_role": "True-person verification only. CommonGround stores the consented URL/verification status, not scraped profile facts.",
+    "ai_passport_role": "User-approved personality, taste, social energy, conversation style, and first-meeting preferences.",
+    "self_input_role": "Explicit facts that should never be inferred: intent, availability, budget, location radius, alcohol comfort, group size, and contact boundaries.",
+    "final_profile_rule": "The matching profile is generated only after user redaction and final approval."
+  },
+  "human_in_the_loop": {
+    "enabled": true,
+    "review_triggers": [
+      "user asks what data is visible",
+      "user pastes sensitive data",
+      "verification confidence is low",
+      "user reports safety concern",
+      "user wants manual edit before import"
+    ]
+  },
+  "messages": [
+    {
+      "step": "invite_opening",
+      "copy": "You are one of a small first circle invited to CommonGround: a private NTU-origin room network for meeting thoughtful people offline. We do not do swiping. We design a room worth showing up for.",
+      "expected_user_input": "START"
+    },
+    {
+      "step": "consent",
+      "copy": "To keep the room trusted, reply CONSENT if we may verify you are a real person and help you build a private matching profile from only what you approve. We will not scrape LinkedIn, read raw AI chats, or show raw AI text to other members.",
+      "expected_user_input": "CONSENT"
+    },
+    {
+      "step": "linkedin_verification",
+      "copy": "Step 1/5: paste your LinkedIn profile URL. We use it only as true-person verification, not as your personality or dating profile. Example: https://www.linkedin.com/in/fu-syuan-wang-7719111a9/",
+      "expected_user_input": "LinkedIn profile URL"
+    },
+    {
+      "step": "ai_passport_prompt",
+      "copy": "Step 2/5: open your everyday AI and paste this prompt: 'Summarize me for a vetted offline social app. Include my social energy, conversation style, interests, good first-meet settings, topics I enjoy, awkwardness triggers, and boundaries. Exclude secrets, exact address, income, phone number, health details, and anything sensitive. Return JSON.' Then paste the result here.",
+      "expected_user_input": "User-approved AI Passport JSON/text"
+    },
+    {
+      "step": "redaction",
+      "copy": "Step 3/5: review what you pasted. Reply DELETE followed by anything you want removed, or reply APPROVE PASSPORT when it is safe to convert into matching signals.",
+      "expected_user_input": "DELETE ... or APPROVE PASSPORT"
+    },
+    {
+      "step": "explicit_preferences",
+      "copy": "Step 4/5: answer the details we should never infer: dating intent, available times, budget range, neighborhood radius, alcohol comfort, preferred group size, and contact-exchange boundary. You can answer in one message.",
+      "expected_user_input": "Preference text"
+    },
+    {
+      "step": "preview",
+      "copy": "Step 5/5: I will show you a plain-language preview of your matching profile. No JSON, no internal scores. Reply APPROVE if it feels right, or EDIT followed by what you want changed. Other members will not see your raw AI Passport, LinkedIn URL, dating intent, or contact info.",
+      "expected_user_input": "CONFIRM"
+    }
+  ],
+  "structured_profile_created_after_confirmation": {
+    "verification": [
+      "identity_verified",
+      "linkedin_url_hash_or_handle",
+      "community_eligible"
+    ],
+    "ai_passport_signals": [
+      "social_energy",
+      "conversation_style",
+      "taste_clusters",
+      "conversation_topics",
+      "awkwardness_triggers"
+    ],
+    "self_input_signals": [
+      "dating_intent",
+      "availability",
+      "budget_range",
+      "location_radius",
+      "alcohol_comfort",
+      "preferred_group_size",
+      "boundaries"
+    ],
+    "used_by_recommender": [
+      "eligibility gate",
+      "candidate retrieval",
+      "room formation",
+      "activity/venue recommendation",
+      "Context Card generation"
+    ],
+    "never_shared_to_other_members": [
+      "LinkedIn URL",
+      "raw AI Passport",
+      "dating intent",
+      "contact info",
+      "internal scores"
+    ]
+  },
+  "spectrum_runtime_mapping": {
+    "message_stream": "Every inbound user message arrives as [space, message] from app.messages.",
+    "space": "The active iMessage DM or group conversation. CommonGround sends replies through space.send(...) and uses space.responding(...) for typing indicators.",
+    "message": "The user input. CommonGround narrows on message.content.type before handling text, attachments, voice notes, poll votes, or replies.",
+    "user": "The sender. Memory is scoped per verified person, not globally.",
+    "state_machine": [
+      "invited",
+      "consented",
+      "linkedin_received",
+      "passport_received",
+      "passport_approved",
+      "preferences_received",
+      "profile_approved",
+      "room_recommended",
+      "mutual_confirm_pending",
+      "event_confirmed",
+      "feedback_collected"
+    ]
+  },
+  "imessage_native_features": {
+    "typing_indicators": "Use space.responding(...) while RoomTAIRA generates profile previews or Context Cards.",
+    "tapbacks": "Use iMessage tapbacks for lightweight acknowledgement after START, CONSENT, and APPROVE.",
+    "polls": "Use Spectrum poll content for YES / MAYBE / SKIP when supported; otherwise use text fallback.",
+    "threaded_replies": "Use message.reply(...) for clarification questions tied to a specific user input.",
+    "group_creation": "After enough users mutually confirm, use the iMessage provider space(...) API to create the event group.",
+    "group_rename": "Rename the group chat to the room title, such as 'CommonGround: Gallery + Tea'.",
+    "contact_card": "After first exchange, send a CommonGround contact card so the line becomes a known contact."
+  },
+  "deliverability_rules": {
+    "inbound_first": "User should initiate by tapping a prefilled iMessage link and sending START. Avoid cold outbound first messages.",
+    "first_message": "Text only; no links or media in the first message.",
+    "followups": "Cap non-responder followups at 2-3, spaced across days.",
+    "pacing": "Pace messages naturally and debounce bursts instead of replying to each fragment.",
+    "capacity": "Track per-server and per-line volume; stop assigning new users near 70-80% utilization."
+  },
+  "reliability_rules": {
+    "debounce": "Batch bursty messages into one turn before running RoomTAIRA.",
+    "cancellation": "Cancel in-flight generation when a newer user message arrives.",
+    "carry_forward": "If a job is cancelled after draining queued messages, carry them forward into the next batch.",
+    "idempotency": "Use stable clientGuid values for multi-message sends so retries do not duplicate iMessages.",
+    "resume_cursor": "Persist startIndex on send jobs so retries resume after already-sent messages.",
+    "memory_scope": "Scope memory by resourceId = verified user address and threadId = chat id.",
+    "failure_audit": "Record failed jobs with stage, payload pointer, and error for human review."
+  }
+}
+
+========================================================================================
+1. Claim Invite + Verify
+========================================================================================
+{
+  "invite_code": "NTU-FIRSTHOUR-001",
+  "community_eligible": true,
+  "identity_verified": true,
+  "community_context": "consented LinkedIn verification / NTU invite candidate",
+  "consented_linkedin_url": "https://www.linkedin.com/in/fu-syuan-wang-7719111a9/",
+  "linkedin_usage": "consented verification/context handle only; no scraping",
+  "pitch_line": "Verification gives us trust and context. It does not define the person."
+}
+
+========================================================================================
+2. Import + Redact CommonGround Passport
+========================================================================================
+{
+  "before_ai_import": {
+    "community_eligible": true,
+    "identity_verified": true,
+    "career_cluster": "product",
+    "dating_intent": "open_to_meet",
+    "availability": [
+      "Thu evening",
+      "Sun afternoon"
+    ],
+    "consented_linkedin_url": "https://www.linkedin.com/in/fu-syuan-wang-7719111a9/",
+    "linkedin_usage": "consented verification/context handle only; no scraping"
+  },
+  "after_ai_import_and_redaction": {
+    "social_energy": "low-medium",
+    "conversation_style": "thoughtful analytical product-oriented",
+    "taste_clusters": [
+      "AI agents",
+      "matcha",
+      "social products",
+      "trust networks",
+      "city walks"
+    ],
+    "conversation_topics": [
+      "AI agents",
+      "offline social matching",
+      "Taipei cafes"
+    ],
+    "awkwardness_triggers": [
+      "loud bars",
+      "forced networking",
+      "pressure to exchange contacts"
+    ],
+    "redaction_note": "Raw AI conversations stay outside CommonGround; only this user-approved Passport is imported."
+  }
+}
+
+========================================================================================
+2b. User Input To Matching Profile
+========================================================================================
+{
+  "workflow": [
+    "Photon iMessage collects explicit consent.",
+    "LinkedIn URL verifies true-person identity only.",
+    "User generates AI Passport in their everyday AI.",
+    "User pastes AI Passport into iMessage.",
+    "User redacts/deletes sensitive content.",
+    "User enters explicit preferences that should never be inferred.",
+    "CommonGround normalizes approved text into structured matching signals.",
+    "User confirms the limited matching profile.",
+    "RoomTAIRA uses only the confirmed profile, not raw LinkedIn facts or raw AI chats."
+  ],
+  "linkedin_fields_used": {
+    "identity_verified": true,
+    "linkedin_url": "https://www.linkedin.com/in/fu-syuan-wang-7719111a9/",
+    "usage": "true-person verification only"
+  },
+  "matching_profile_from_ai_passport": {
+    "social_energy": "low-medium",
+    "conversation_style": "thoughtful analytical product-oriented",
+    "taste_clusters": [
+      "AI agents",
+      "matcha",
+      "social products",
+      "trust networks",
+      "city walks"
+    ],
+    "conversation_topics": [
+      "AI agents",
+      "offline social matching",
+      "Taipei cafes"
+    ],
+    "awkwardness_triggers": [
+      "loud bars",
+      "forced networking",
+      "pressure to exchange contacts"
+    ]
+  },
+  "matching_profile_from_self_input": {
+    "dating_intent": "open_to_meet",
+    "availability": [
+      "Thu evening",
+      "Sun afternoon"
+    ],
+    "budget_range": [
+      800,
+      1500
+    ],
+    "location_radius": [
+      "Da'an",
+      "Xinyi",
+      "Zhongshan"
+    ],
+    "alcohol_comfort": "low",
+    "preferred_group_size": 4,
+    "boundaries": [
+      "public venue first",
+      "mutual opt-in contact exchange"
+    ]
+  },
+  "privacy_boundary": "Other members see only the Context Card, never the LinkedIn URL, raw Passport, dating intent, contact info, or internal scores."
+}
+
+========================================================================================
+3. Eligibility Gate
+========================================================================================
+{
+  "hard_gate_principle": "Safety, identity, consent, availability, and boundaries are hard gates before recommendation begins.",
+  "eligible_count": 11,
+  "rejected_count": 1,
+  "rejected_examples": {
+    "u_011": [
+      "no availability overlap"
+    ]
+  }
+}
+
+========================================================================================
+4. Candidate Retrieval
+========================================================================================
+[
+  {
+    "user_id": "u_004",
+    "name": "Daniel",
+    "career_cluster": "startup",
+    "retrieval_score": 0.42,
+    "embedding_text": "startup NTU engineering alumni Founder type interested in AI agents, city walks, cafe work sessions, independent bookstores, and calm social settings. medium playful curious practical AI agents startups city walks bookstores coffee AI agents building products Taipei neighborhoods Da'an Zhongshan Songshan open_to_meet"
+  },
+  {
+    "user_id": "u_006",
+    "name": "Frank",
+    "career_cluster": "finance",
+    "retrieval_score": 0.311,
+    "embedding_text": "finance NTU economics alumni Investment analyst interested in AI market structure, coffee, wine, macro conversations, and low-pressure after-work plans. low-medium analytical dry-humor calm AI markets coffee wine macro career transitions AI in finance markets Taipei cafes Da'an Xinyi open_to_meet"
+  },
+  {
+    "user_id": "u_009",
+    "name": "Ian",
+    "career_cluster": "product",
+    "retrieval_score": 0.295,
+    "embedding_text": "product NTU MBA alumni MBA operator interested in AI productivity, career pivots, matcha, wine, and honest conversations about ambition without posturing. medium warm strategic open AI productivity career pivots matcha wine MBA career pivots AI at work ambition Da'an Xinyi Zhongshan open_to_meet"
+  },
+  {
+    "user_id": "u_012",
+    "name": "Lina",
+    "career_cluster": "data",
+    "retrieval_score": 0.271,
+    "embedding_text": "data NTU statistics alumni Data scientist interested in recommender systems, matcha, galleries, urban walks, and conversations that connect technical ideas to daily life. low-medium curious precise relaxed recommender systems matcha galleries urban walks AI recommendation systems AI in life city design Da'an Zhongshan Gongguan open_to_meet"
+  },
+  {
+    "user_id": "u_010",
+    "name": "Jasmine",
+    "career_cluster": "law",
+    "retrieval_score": 0.26,
+    "embedding_text": "law NTU law alumni Lawyer interested in privacy, art spaces, bookstores, structured self-disclosure, and respectful low-pressure dating. low-medium thoughtful precise warm privacy art bookstores structured conversation tea privacy trust city culture Da'an Zhongshan serious_dating"
+  },
+  {
+    "user_id": "u_002",
+    "name": "Ben",
+    "career_cluster": "product",
+    "retrieval_score": 0.215,
+    "embedding_text": "product NTU computer science alumni Product manager who likes AI tools, quiet cafes, future of work debates, design strategy, and reflective conversation. low-medium curious reflective structured AI product strategy quiet cafes design bookstores AI tools career design urban life Da'an Xinyi Songshan open_to_meet"
+  },
+  {
+    "user_id": "u_005",
+    "name": "Elaine",
+    "career_cluster": "creative",
+    "retrieval_score": 0.211,
+    "embedding_text": "creative NTU design-adjacent alumni Brand strategist who enjoys gallery walks, scent workshops, visual culture, thoughtful food experiences, and warm small groups. medium observant warm aesthetic gallery scent visual culture food city walks culture brand taste Zhongshan Da'an Xinyi friendship_first"
+  },
+  {
+    "user_id": "u_007",
+    "name": "Grace",
+    "career_cluster": "tech",
+    "retrieval_score": 0.189,
+    "embedding_text": "tech NTU CS student Graduate student exploring AI safety, Computex, bookstores, matcha, and conversations that do not feel like networking. low reflective precise gentle AI safety Computex bookstores matcha research AI safety research culture future of work Da'an Gongguan Zhongshan open_to_meet"
+  }
+]
+
+========================================================================================
+5. Reciprocal Person Matching
+========================================================================================
+{
+  "principle": "A movie does not reject you. A person can. We use reciprocal recommendation.",
+  "formula": "sqrt(P(A accepts B) * P(B accepts A))",
+  "examples": [
+    {
+      "pair": "u_001-u_004",
+      "P(Fu-Syuan Wang_accepts_Daniel)": 0.569,
+      "P(Daniel_accepts_Fu-Syuan Wang)": 0.569,
+      "reciprocal_score": 0.569
+    },
+    {
+      "pair": "u_001-u_006",
+      "P(Fu-Syuan Wang_accepts_Frank)": 0.511,
+      "P(Frank_accepts_Fu-Syuan Wang)": 0.511,
+      "reciprocal_score": 0.511
+    },
+    {
+      "pair": "u_001-u_009",
+      "P(Fu-Syuan Wang_accepts_Ian)": 0.459,
+      "P(Ian_accepts_Fu-Syuan Wang)": 0.459,
+      "reciprocal_score": 0.459
+    },
+    {
+      "pair": "u_001-u_012",
+      "P(Fu-Syuan Wang_accepts_Lina)": 0.492,
+      "P(Lina_accepts_Fu-Syuan Wang)": 0.492,
+      "reciprocal_score": 0.492
+    },
+    {
+      "pair": "u_001-u_010",
+      "P(Fu-Syuan Wang_accepts_Jasmine)": 0.443,
+      "P(Jasmine_accepts_Fu-Syuan Wang)": 0.443,
+      "reciprocal_score": 0.443
+    }
+  ]
+}
+
+========================================================================================
+6. Consensus-Aware Group Formation
+========================================================================================
+[
+  {
+    "group": [
+      "u_001:Fu-Syuan Wang",
+      "u_004:Daniel",
+      "u_006:Frank",
+      "u_012:Lina"
+    ],
+    "group_utility": 0.532,
+    "conversation_density": 0.336,
+    "mutual_acceptance": 0.485,
+    "minimum_member_comfort": 0.455,
+    "diversity_of_perspectives": 0.925
+  },
+  {
+    "group": [
+      "u_001:Fu-Syuan Wang",
+      "u_010:Jasmine",
+      "u_004:Daniel",
+      "u_012:Lina"
+    ],
+    "group_utility": 0.526,
+    "conversation_density": 0.319,
+    "mutual_acceptance": 0.467,
+    "minimum_member_comfort": 0.434,
+    "diversity_of_perspectives": 0.963
+  },
+  {
+    "group": [
+      "u_001:Fu-Syuan Wang",
+      "u_009:Ian",
+      "u_006:Frank",
+      "u_004:Daniel"
+    ],
+    "group_utility": 0.522,
+    "conversation_density": 0.351,
+    "mutual_acceptance": 0.493,
+    "minimum_member_comfort": 0.471,
+    "diversity_of_perspectives": 0.788
+  }
+]
+
+========================================================================================
+7. Activity / Venue Recommendation + Re-Ranking
+========================================================================================
+[
+  {
+    "event_id": "e_001",
+    "group": [
+      "u_001",
+      "u_004",
+      "u_006",
+      "u_012"
+    ],
+    "activity": "Matcha tasting + cafe debrief",
+    "venue": "Hikari Matcha Room, Da'an",
+    "time": "Thu evening",
+    "first_meeting_quality": 0.521,
+    "final_event_score": 0.628,
+    "why_this_group": [
+      "enough perspective diversity to avoid a too-homogeneous room",
+      "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+      "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+    ],
+    "learning_note": "After feedback, the system may apply repeated-vibe penalty if this category repeats too often."
+  },
+  {
+    "event_id": "e_002",
+    "group": [
+      "u_001",
+      "u_010",
+      "u_004",
+      "u_012"
+    ],
+    "activity": "Matcha tasting + cafe debrief",
+    "venue": "Hikari Matcha Room, Da'an",
+    "time": "Thu evening",
+    "first_meeting_quality": 0.512,
+    "final_event_score": 0.621,
+    "why_this_group": [
+      "enough perspective diversity to avoid a too-homogeneous room",
+      "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+      "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+    ],
+    "learning_note": "After feedback, the system may apply repeated-vibe penalty if this category repeats too often."
+  },
+  {
+    "event_id": "e_003",
+    "group": [
+      "u_001",
+      "u_009",
+      "u_006",
+      "u_004"
+    ],
+    "activity": "Matcha tasting + cafe debrief",
+    "venue": "Hikari Matcha Room, Da'an",
+    "time": "Thu evening",
+    "first_meeting_quality": 0.527,
+    "final_event_score": 0.608,
+    "why_this_group": [
+      "enough perspective diversity to avoid a too-homogeneous room",
+      "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+      "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+    ],
+    "learning_note": "After feedback, the system may apply repeated-vibe penalty if this category repeats too often."
+  }
+]
+
+========================================================================================
+8. Context Cards
+========================================================================================
+
+--- e_001 ---
+{
+  "event_title": "Matcha tasting + cafe debrief: Finance x AI-curious",
+  "time": "Thu evening",
+  "venue": "Hikari Matcha Room, Da'an",
+  "group_size": 4,
+  "why_this_room": [
+    "enough perspective diversity to avoid a too-homogeneous room",
+    "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+    "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+  ],
+  "shared_context": [
+    "AI agents",
+    "Taipei cafes",
+    "city walks",
+    "coffee",
+    "matcha"
+  ],
+  "participant_snapshots": [
+    "product / thoughtful analytical product-oriented; open to AI agents, offline social matching",
+    "startup / playful curious practical; open to AI agents, building products",
+    "finance / analytical dry-humor calm; open to AI in finance, markets",
+    "data / curious precise relaxed; open to recommendation systems, AI in life"
+  ],
+  "warm_up_prompts": [
+    "What is one thing about matcha you wish more people talked about honestly?",
+    "What makes a cafe, gallery, or bookstore feel easy to spend time in?",
+    "What is a conversation you enjoy but rarely get to have?"
+  ],
+  "boundaries": [
+    "Public venue first.",
+    "No forced contact exchange.",
+    "Contact exchange only happens with mutual opt-in after the event.",
+    "Raw AI summaries, dating intent, and private details are never shown to other participants."
+  ],
+  "mutual_confirm": {
+    "status": "pending",
+    "rule": "Group happens only if enough participants opt in after previewing this Context Card."
+  }
+}
+
+--- e_002 ---
+{
+  "event_title": "Matcha tasting + cafe debrief: NTU thoughtful small-group room",
+  "time": "Thu evening",
+  "venue": "Hikari Matcha Room, Da'an",
+  "group_size": 4,
+  "why_this_room": [
+    "enough perspective diversity to avoid a too-homogeneous room",
+    "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+    "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+  ],
+  "shared_context": [
+    "AI agents",
+    "bookstores",
+    "city walks",
+    "matcha",
+    "privacy"
+  ],
+  "participant_snapshots": [
+    "product / thoughtful analytical product-oriented; open to AI agents, offline social matching",
+    "law / thoughtful precise warm; open to privacy, trust",
+    "startup / playful curious practical; open to AI agents, building products",
+    "data / curious precise relaxed; open to recommendation systems, AI in life"
+  ],
+  "warm_up_prompts": [
+    "What is one thing about matcha you wish more people talked about honestly?",
+    "What makes a cafe, gallery, or bookstore feel easy to spend time in?",
+    "What is a conversation you enjoy but rarely get to have?"
+  ],
+  "boundaries": [
+    "Public venue first.",
+    "No forced contact exchange.",
+    "Contact exchange only happens with mutual opt-in after the event.",
+    "Raw AI summaries, dating intent, and private details are never shown to other participants."
+  ],
+  "mutual_confirm": {
+    "status": "pending",
+    "rule": "Group happens only if enough participants opt in after previewing this Context Card."
+  }
+}
+
+--- e_003 ---
+{
+  "event_title": "Matcha tasting + cafe debrief: Finance x AI-curious",
+  "time": "Thu evening",
+  "venue": "Hikari Matcha Room, Da'an",
+  "group_size": 4,
+  "why_this_room": [
+    "enough perspective diversity to avoid a too-homogeneous room",
+    "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+    "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+  ],
+  "shared_context": [
+    "AI agents",
+    "Taipei cafes",
+    "career pivots",
+    "city walks",
+    "coffee"
+  ],
+  "participant_snapshots": [
+    "product / thoughtful analytical product-oriented; open to AI agents, offline social matching",
+    "product / warm strategic open; open to career pivots, AI at work",
+    "finance / analytical dry-humor calm; open to AI in finance, markets",
+    "startup / playful curious practical; open to AI agents, building products"
+  ],
+  "warm_up_prompts": [
+    "What is one thing about matcha you wish more people talked about honestly?",
+    "What makes a cafe, gallery, or bookstore feel easy to spend time in?",
+    "What is a conversation you enjoy but rarely get to have?"
+  ],
+  "boundaries": [
+    "Public venue first.",
+    "No forced contact exchange.",
+    "Contact exchange only happens with mutual opt-in after the event.",
+    "Raw AI summaries, dating intent, and private details are never shown to other participants."
+  ],
+  "mutual_confirm": {
+    "status": "pending",
+    "rule": "Group happens only if enough participants opt in after previewing this Context Card."
+  }
+}
+
+========================================================================================
+9. Photon Spectrum Delivery Layer
+========================================================================================
+{
+  "principle": "Do not reinvent iMessage, WhatsApp, Telegram, or Slack plumbing. CommonGround hands the recommended room and Context Card to Photon Spectrum.",
+  "official_claim_used_in_plan": "Photon Spectrum connects agents to iMessage, WhatsApp, Telegram, Slack, and other everyday channels, with unified API, message history, audit logs, and human-in-the-loop controls.",
+  "delivery_payload_for_top_event": {
+    "delivery_provider": "Photon Spectrum",
+    "why_not_build_channel_layer": "Spectrum already connects agents to iMessage, WhatsApp, Telegram, Slack, and other everyday channels through a unified API.",
+    "source": "https://photon.codes/",
+    "channel_strategy": {
+      "primary": "iMessage",
+      "fallbacks": [
+        "WhatsApp Business",
+        "Terminal demo provider",
+        "future custom providers"
+      ],
+      "routing_rule": "Use the participant's preferred available channel; fall back automatically if iMessage delivery is unavailable."
+    },
+    "spectrum_primitives": {
+      "Message": "Inbound content from iMessage, WhatsApp Business, terminal, or a custom provider.",
+      "Space": "Conversation context. Send Context Cards, polls, replies, typing indicators, and group updates through this.",
+      "User": "Participant identity on the provider, resolved by phone/email for iMessage.",
+      "Provider": "iMessage first, terminal for local demo, WhatsApp Business for cross-platform fallback."
+    },
+    "controls": {
+      "message_history": true,
+      "audit_logs": true,
+      "human_in_the_loop_review": true,
+      "human_review_triggers": [
+        "safety escalation",
+        "ambiguous consent response",
+        "participant asks to edit or redact context",
+        "delivery failure before event confirmation"
+      ]
+    },
+    "outbound_messages": [
+      {
+        "type": "context_card",
+        "channel_component": "rich message",
+        "title": "Matcha tasting + cafe debrief: Finance x AI-curious",
+        "body": {
+          "time": "Thu evening",
+          "venue": "Hikari Matcha Room, Da'an",
+          "why_this_room": [
+            "enough perspective diversity to avoid a too-homogeneous room",
+            "Matcha tasting + cafe debrief creates a shared object, reducing awkwardness",
+            "Hikari Matcha Room satisfies public-first, budget, capacity, and location constraints"
+          ],
+          "shared_context": [
+            "AI agents",
+            "Taipei cafes",
+            "city walks",
+            "coffee",
+            "matcha"
+          ],
+          "warm_up_prompts": [
+            "What is one thing about matcha you wish more people talked about honestly?",
+            "What makes a cafe, gallery, or bookstore feel easy to spend time in?",
+            "What is a conversation you enjoy but rarely get to have?"
+          ],
+          "boundaries": [
+            "Public venue first.",
+            "No forced contact exchange.",
+            "Contact exchange only happens with mutual opt-in after the event.",
+            "Raw AI summaries, dating intent, and private details are never shown to other participants."
+          ]
+        }
+      },
+      {
+        "type": "mutual_confirm_poll",
+        "channel_component": "Spectrum poll content when supported; text fallback otherwise",
+        "question": "Are you in for this CommonGround room?",
+        "options": [
+          "Yes",
+          "Maybe",
+          "Skip"
+        ],
+        "confirmation_rule": "Group happens only if enough participants opt in after previewing this Context Card."
+      },
+      {
+        "type": "event_group_creation",
+        "channel_component": "iMessage group space",
+        "when": "Only after enough participants opt in.",
+        "post_creation_actions": [
+          "send short welcome",
+          "rename group to room title",
+          "send Context Card summary",
+          "send event boundary reminder"
+        ]
+      }
+    ],
+    "privacy_contract": {
+      "send_to_spectrum": [
+        "event title",
+        "time",
+        "venue",
+        "limited Context Card",
+        "mutual confirm options"
+      ],
+      "do_not_send_to_spectrum": [
+        "raw AI conversations",
+        "unredacted Passport",
+        "private safety notes",
+        "dating intent unless explicitly needed for user-facing copy",
+        "internal scoring features"
+      ]
+    }
+  }
+}
+
+========================================================================================
+10. Post-Event Vibe Feedback Learning
+========================================================================================
+{
+  "principle": "Feedback tunes future recommendations; it does not rate humans like products.",
+  "reward_formula": "0.25 attended + 0.25 natural conversation + 0.20 similar vibe again + 0.15 activity container + 0.10 mutual opt-in + 0.05 no safety issue",
+  "learning_examples": [
+    {
+      "user_id": "u_001",
+      "reward": 0.929,
+      "energy_feedback": "balanced",
+      "next_tuning_direction": "exploit nearby proven vibe",
+      "note": "Preference tuning only; this does not rate another person."
+    },
+    {
+      "user_id": "u_002",
+      "reward": 0.823,
+      "energy_feedback": "balanced",
+      "next_tuning_direction": "exploit nearby proven vibe",
+      "note": "Preference tuning only; this does not rate another person."
+    },
+    {
+      "user_id": "u_003",
+      "reward": 0.826,
+      "energy_feedback": "too quiet",
+      "next_tuning_direction": "exploit nearby proven vibe",
+      "note": "Preference tuning only; this does not rate another person."
+    },
+    {
+      "user_id": "u_004",
+      "reward": 0.792,
+      "energy_feedback": "balanced",
+      "next_tuning_direction": "exploit nearby proven vibe",
+      "note": "Preference tuning only; this does not rate another person."
+    },
+    {
+      "user_id": "u_005",
+      "reward": 0.815,
+      "energy_feedback": "balanced",
+      "next_tuning_direction": "exploit nearby proven vibe",
+      "note": "Preference tuning only; this does not rate another person."
+    }
+  ]
+}
+
+========================================================================================
+11. Before Feedback -> After Feedback Example
+========================================================================================
+{
+  "user": "u_001",
+  "before": {
+    "preferred_energy": "calm but lively",
+    "recent_vibes": [
+      "matcha",
+      "ai-agents",
+      "Da'an"
+    ]
+  },
+  "feedback": {
+    "conversation_natural": 0.92,
+    "would_meet_similar": 0.88,
+    "activity_container_fit": 0.82,
+    "energy_feedback": "balanced",
+    "tune_next": "slightly more energetic next time"
+  },
+  "after": {
+    "preferred_energy": "calm but lively",
+    "recent_vibes": [
+      "matcha",
+      "ai-agents",
+      "Da'an"
+    ],
+    "last_feedback_reward": 0.929,
+    "last_energy_feedback": "balanced",
+    "next_tuning_direction": "exploit nearby proven vibe",
+    "next_tuning_note": "slightly more energetic next time",
+    "human_friendly_note": "Preference tuning only; this does not rate another person."
+  },
+  "result": "The next recommendation keeps the AI x career conversation cluster but explores a slightly more energetic room."
+}
+
+========================================================================================
+Judge Answer
+========================================================================================
+For MVP, we use RoomTAIRA, a TAIRA-inspired thought-augmented room recommender. The agentic layer interprets fuzzy social intent and decomposes it into people retrieval, reciprocal matching, room formation, activity selection, venue constraints, safety critique, and Context Card generation. We do not build the channel layer ourselves: Photon Spectrum delivers the agent experience through iMessage and other everyday channels with message history, audit logs, and human-in-the-loop controls. The feedback layer follows contextual-bandit logic to balance repeating proven vibes with exploring adjacent ones.

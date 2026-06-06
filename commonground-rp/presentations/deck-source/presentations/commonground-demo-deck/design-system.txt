@@ -1,0 +1,18 @@
+Slide size: 1280x720
+Background: warm near-white #F8F5EF with deep ink #16211F. Section contrast uses charcoal #111817.
+Typography: Aptos Display for claims; Aptos for body; Aptos Mono for code-like command snippets.
+Palette:
+- Ink #16211F for primary text
+- Paper #F8F5EF background
+- Sage #6E8B75 primary accent
+- Coral #D96C4F action accent
+- Steel #6C7A89 secondary text
+- Mist #E6EBE4 pale containers
+- Gold #C9A959 highlight
+Chart grammar: direct labels, no legends, score bars with inline numbers.
+Diagram grammar: thin hairline connectors, labeled stages, exact current/future status chips.
+Container grammar: square or 6px radius panels only; no nested cards.
+Footer grammar: quiet source/code note bottom left; page marker bottom right.
+Kicker grammar: all-caps small label with left accent tick.
+Banned motifs: gradient blobs, fake app screenshots, fake logos, dark-blue SaaS dashboard look.
+Layout families: cover manifesto, problem ladder, horizontal flow, three-layer architecture, scored engine diagram, context card mock, availability overlap, repo map, status matrix, demo checklist.

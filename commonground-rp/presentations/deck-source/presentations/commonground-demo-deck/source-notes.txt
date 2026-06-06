@@ -1,0 +1,10 @@
+Sources used from local GitHub working copy:
+- README.md: run commands, CommonGround member flow, methodology command, iMessage/Spectrum positioning
+- docs/commonground-business-flow-v2.md: code map, product surfaces, onboarding, recommendation, scheduling, event confirmation, feedback, native boundary
+- docs/methodology-to-mvp-map.md: MVP vs not-yet-real feature map and pitch-safe language
+- docs/ios-local-integrations.md: local iPhone Calendar, Apple Maps, location/contact handoff boundaries
+- src/commonground.ts: CommonGround state machine and user-facing prompts
+- src/commonground_recommender.ts: profile parser, room recommender, mutual slot parser
+- src/commonground_methodology.ts and src/methodology_map.ts: methodology/permission mapping and second-interaction metric
+- src/agent.ts / harness tests: Spectrum agent routing and host RSVP surface
+Metrics are code/test facts only: 37 passing tests, 6 test files, core modules named in repo. No external market size or financial metrics invented.
