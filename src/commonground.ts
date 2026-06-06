@@ -1,5 +1,13 @@
 import type { AgentInput, AgentResponse } from "./domain";
 import { appleMapsSearchUrl, formatIphoneCalendarEventCard } from "./ios";
+import {
+  findMutualSlots,
+  formatSlotPrompt,
+  parseAvailabilityWindows,
+  recommendRoom,
+  type MutualSlot,
+  type RoomRecommendation,
+} from "./commonground_recommender";
 
 type CommonGroundStep =
   | "invited"
@@ -19,56 +27,11 @@ type CommonGroundState = {
   linkedinUrl?: string;
   passportSummary?: string;
   preferences?: string;
-  room?: DemoRoom;
-  selectedSlot?: DemoSlot;
-};
-
-type DemoUser = {
-  id: string;
-  name: string;
-  role: string;
-  tags: string[];
-};
-
-type DemoSlot = {
-  id: string;
-  label: string;
-  start: Date;
-  end: Date;
-};
-
-type DemoRoom = {
-  title: string;
-  activity: string;
-  venue: string;
-  people: DemoUser[];
-  sharedContext: string[];
-  prompts: string[];
-  reason: string;
+  room?: RoomRecommendation;
+  selectedSlot?: MutualSlot;
 };
 
 const states = new Map<string, CommonGroundState>();
-
-const demoPeople: DemoUser[] = [
-  {
-    id: "u_004",
-    name: "Mina",
-    role: "AI product manager",
-    tags: ["AI tools", "career transitions", "quiet cafes", "city walks"],
-  },
-  {
-    id: "u_007",
-    name: "Ethan",
-    role: "NTU alum, fintech builder",
-    tags: ["finance", "startups", "matcha", "thoughtful conversation"],
-  },
-  {
-    id: "u_009",
-    name: "Claire",
-    role: "UX researcher",
-    tags: ["psychology", "books", "gallery walks", "low-pressure groups"],
-  },
-];
 
 export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefined {
   const text = input.text.trim();
@@ -136,7 +99,7 @@ export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefin
 
     case "awaiting_preferences":
       state.preferences = text;
-      state.room = buildDemoRoom();
+      state.room = recommendRoom(state.passportSummary ?? "", state.preferences);
       state.step = "room_recommended";
       return { text: contextCard(state.room) };
 
@@ -156,17 +119,20 @@ export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefin
         return { text: "Reply YES, MAYBE, or SKIP for this room." };
       }
       state.step = "availability_collecting";
-      return { text: availabilityPrompt() };
+      return { text: availabilityPrompt(state.room) };
 
     case "availability_collecting": {
-      const slots = parseSlots(text);
+      const windows = parseAvailabilityWindows(text);
+      const slots = findMutualSlots(windows);
       if (slots.length === 0) return { text: availabilityPrompt() };
       const selectedSlot = slots[0]!;
       state.selectedSlot = selectedSlot;
       state.step = "slot_selected";
       return {
         text: [
-          `I can hold ${selectedSlot.label} for this room.`,
+          selectedSlot.confidence === "mutual"
+            ? `I found a mutual window: ${selectedSlot.label}.`
+            : `I can hold your free window: ${selectedSlot.label}. I still need friend availability for a true mutual slot.`,
           "Reply CONFIRM ROOM and I’ll prepare the iPhone Calendar event card and Apple Maps link.",
         ].join("\n"),
       };
@@ -273,28 +239,7 @@ function preferencesPrompt(): string {
   ].join("\n");
 }
 
-function buildDemoRoom(): DemoRoom {
-  return {
-    title: "AI x Career Transition Coffee Room",
-    activity: "coffee / matcha with structured conversation cards",
-    venue: "quiet cafe near Da'an Taipei",
-    people: demoPeople,
-    sharedContext: [
-      "AI changing work and personal productivity",
-      "career transitions across tech, finance, and product",
-      "low-pressure city cafe culture",
-    ],
-    prompts: [
-      "What is one workflow you wish AI could automate?",
-      "What kind of city place makes you feel most like yourself?",
-      "What is a career topic you enjoy discussing but rarely get to talk about?",
-    ],
-    reason:
-      "High conversation density, compatible low-medium social energy, public-first venue, and no forced contact exchange.",
-  };
-}
-
-function contextCard(room: DemoRoom): string {
+function contextCard(room: RoomRecommendation): string {
   return [
     "Your weekly room drop is ready.",
     "",
@@ -305,6 +250,11 @@ function contextCard(room: DemoRoom): string {
     "",
     "Why this room works:",
     room.reason,
+    "",
+    `First-meeting quality: ${Math.round(room.scores.firstMeetingQuality * 100)} / 100`,
+    `Dyadic chemistry: ${Math.round(room.scores.dyadicChemistry * 100)} / 100`,
+    `Group dynamics: ${Math.round(room.scores.groupDynamics * 100)} / 100`,
+    `Experience fit: ${Math.round(room.scores.experienceFit * 100)} / 100`,
     "",
     "Shared context:",
     ...room.sharedContext.map((item) => `- ${item}`),
@@ -317,66 +267,20 @@ function contextCard(room: DemoRoom): string {
     "- no forced contact exchange",
     "- private safety review available",
     "",
+    "Method:",
+    ...room.methodologyNotes.map((item) => `- ${item}`),
+    "",
     "Reply YES, MAYBE, or SKIP.",
   ].join("\n");
 }
 
-function availabilityPrompt(): string {
-  return [
-    "Great. Check your iPhone Calendar and send 2-4 free windows.",
-    "",
-    "Example: Thu 7:30 PM, Sat 3 PM, Sun 4:30 PM",
-    "",
-    "I only need free windows, not event names or private details.",
-  ].join("\n");
-}
-
-function parseSlots(text: string): DemoSlot[] {
-  const parts = text
-    .replace(/[，；;]/g, ",")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const now = new Date();
-
-  return parts.flatMap((part, index) => {
-    const dayOffset = dayOffsetFrom(part.toLowerCase(), now);
-    const time = part.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    if (dayOffset === undefined || !time) return [];
-    let hour = Number(time[1]);
-    const minute = time[2] ? Number(time[2]) : 0;
-    const meridiem = time[3]?.toLowerCase();
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
-    if (!meridiem && hour < 9) hour += 12;
-    const start = new Date(now);
-    start.setDate(now.getDate() + dayOffset);
-    start.setHours(hour, minute, 0, 0);
-    const end = new Date(start.getTime() + 90 * 60_000);
-    return [{ id: String(index + 1), label: formatSlot(start), start, end }];
-  }).slice(0, 3);
-}
-
-function dayOffsetFrom(text: string, now: Date): number | undefined {
-  if (text.includes("tomorrow")) return 1;
-  const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const targetDay = days.findIndex((day) => text.includes(day));
-  if (targetDay === -1) return undefined;
-  const offset = (targetDay - now.getDay() + 7) % 7;
-  return offset === 0 ? 7 : offset;
-}
-
-function formatSlot(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+function availabilityPrompt(room?: RoomRecommendation): string {
+  return formatSlotPrompt(room?.people.map((person) => person.name) ?? []);
 }
 
 function eventConfirmation(state: CommonGroundState): string {
   const slot = state.selectedSlot;
-  const room = state.room ?? buildDemoRoom();
+  const room = state.room ?? recommendRoom(state.passportSummary ?? "", state.preferences ?? "");
   if (!slot) return "I lost the selected time. Send availability again.";
 
   return [
