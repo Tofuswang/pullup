@@ -81,4 +81,41 @@ describe("runPullupAgent", () => {
 
     expect(response.text).toContain("llm:ask_guests:collecting_guests");
   });
+
+  test("loops through local iPhone Calendar availability after approval", async () => {
+    const conversationId = "test:calendar-loop";
+
+    await runPullupAgent(input(conversationId, "help me host a coffee meetup"));
+    await runPullupAgent(input(conversationId, "Vivian and two product friends"));
+    await runPullupAgent(input(conversationId, "cozy but useful"));
+
+    const calendar = await runPullupAgent(input(conversationId, "YES"));
+    expect(calendar.text).toContain("iPhone Calendar");
+    expect(calendar.text).toContain("Apple Maps");
+
+    const slots = await runPullupAgent(input(conversationId, "Thu 7:30 PM, Sat 3 PM"));
+    expect(slots.text).toContain("I found a few windows");
+    expect(slots.text).toContain("Reply 1, 2, or 3");
+
+    const selected = await runPullupAgent(input(conversationId, "1"));
+    expect(selected.text).toContain("Reply CREATE HOLD");
+
+    const created = await runPullupAgent(input(conversationId, "CREATE HOLD"));
+    expect(created.text).toContain("Local room hold prepared");
+    expect(created.text).toContain("maps.apple.com");
+  });
+
+  test("requires explicit event creation after slot selection", async () => {
+    const conversationId = "test:calendar-approval";
+
+    await runPullupAgent(input(conversationId, "plan a dinner"));
+    await runPullupAgent(input(conversationId, "friends"));
+    await runPullupAgent(input(conversationId, "low key"));
+    await runPullupAgent(input(conversationId, "YES"));
+    await runPullupAgent(input(conversationId, "Thu 7:30 PM, Sat 3 PM"));
+    await runPullupAgent(input(conversationId, "1"));
+
+    const response = await runPullupAgent(input(conversationId, "ok"));
+    expect(response.text).toContain("No hold is created yet");
+  });
 });

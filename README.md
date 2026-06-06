@@ -23,6 +23,11 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.5
 ```
 
+The scheduling MVP uses local iOS handoff instead of Google OAuth. The agent
+asks users to check iPhone Calendar and send free windows, then sends Apple Maps
+links, supports voluntary location status, and uses only contacts the user
+explicitly shares. See `docs/ios-local-integrations.md`.
+
 Tests inject a fake model, but the running TUI/iMessage agent should use a real
 LLM. If `OPENAI_API_KEY` is missing at runtime, pullup exits with a clear error.
 
@@ -57,6 +62,9 @@ The product logic lives in `src/agent.ts`. Keep channel-specific concerns in
 
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
 handoffs, shared data objects, and MVP build milestones.
+
+See `docs/ios-local-integrations.md` for the local iPhone Calendar, Apple Maps,
+location status, and Contacts handoff plan.
 
 ## Collaboration
 

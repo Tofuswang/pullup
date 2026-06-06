@@ -1,4 +1,16 @@
 import OpenAI from "openai";
+import {
+  createCalendarEvent,
+  formatSlotOptions,
+  localIosCalendarInstructions,
+  parseLocalAvailability,
+  type TimeSlot,
+} from "./calendar";
+import {
+  appleMapsSearchUrl,
+  formatIphoneCalendarEventCard,
+  iosLocalHandoffInstructions,
+} from "./ios";
 
 export type AgentInput = {
   conversationId: string;
@@ -21,11 +33,26 @@ type EventDraft = {
   purpose?: string;
   guests?: string;
   vibe?: string;
+  calendarEventId?: string;
+  selectedSlot?: TimeSlot;
 };
 
 type ConversationState = {
-  step: "idle" | "collecting_guests" | "collecting_vibe" | "draft_ready";
+  step:
+    | "idle"
+    | "collecting_guests"
+    | "collecting_vibe"
+    | "draft_ready"
+    | "calendar_connect_pending"
+    | "availability_collecting"
+    | "slot_options_ready"
+    | "slot_selected"
+    | "event_creation_pending"
+    | "event_confirmed"
+    | "reschedule_pending"
+    | "feedback_pending";
   draft: EventDraft;
+  slots: TimeSlot[];
   history: Array<{
     role: "user" | "assistant";
     content: string;
@@ -43,7 +70,14 @@ type ReplyContext = {
     | "ask_guests"
     | "ask_vibe"
     | "show_draft"
-    | "tighten_draft";
+    | "tighten_draft"
+    | "local_calendar"
+    | "availability_collecting"
+    | "slot_options"
+    | "slot_selected"
+    | "event_created"
+    | "reschedule"
+    | "feedback";
   trace: AgentTraceStep[];
 };
 
@@ -68,6 +102,7 @@ function getState(conversationId: string): ConversationState {
   const fresh: ConversationState = {
     step: "idle",
     draft: {},
+    slots: [],
     history: [],
   };
   conversations.set(conversationId, fresh);
@@ -218,6 +253,23 @@ export async function runPullupAgent(
     });
   }
 
+  if (["cancel", "reschedule", "can't make it", "cant make it"].includes(text.toLowerCase())) {
+    state.step = "reschedule_pending";
+    return reply({
+      state,
+      userText: text,
+      intent: "reschedule",
+      trace: [
+        {
+          agent: "RSVP Coordinator",
+          action: "Move the event back into scheduling.",
+        },
+      ],
+      fallback:
+        "No problem. I’ll move this back into scheduling. Check your iPhone Calendar and send a few free windows, and I’ll propose new slots.",
+    });
+  }
+
   if (state.step === "idle") {
     if (!looksLikeEventStart(text)) {
       return reply({
@@ -312,6 +364,28 @@ export async function runPullupAgent(
   }
 
   if (state.step === "draft_ready") {
+    if (["yes", "y", "approve", "looks good"].includes(text.toLowerCase())) {
+      state.step = "availability_collecting";
+      return reply({
+        state,
+        userText: text,
+        intent: "local_calendar",
+        trace: [
+          {
+            agent: "RSVP Coordinator",
+            action: "Ask for local iPhone availability before proposing slots.",
+          },
+        ],
+        fallback: [
+          "Great. I’ll coordinate this through your iPhone-native tools.",
+          "",
+          localIosCalendarInstructions(),
+          "",
+          iosLocalHandoffInstructions(),
+        ].join("\n"),
+      });
+    }
+
     return reply({
       state,
       userText: text,
@@ -331,6 +405,169 @@ export async function runPullupAgent(
     });
   }
 
+  if (state.step === "calendar_connect_pending" || state.step === "availability_collecting" || state.step === "reschedule_pending") {
+    const normalized = text.toLowerCase();
+    if (hasAvailabilityLikeText(normalized)) {
+      const slots = parseLocalAvailability(text);
+      state.slots = slots;
+      state.step = "slot_options_ready";
+      return reply({
+        state,
+        userText: text,
+        intent: "slot_options",
+        trace: [
+          {
+            agent: "RSVP Coordinator",
+            action: "Use user-shared local iPhone availability to propose slots.",
+          },
+        ],
+        fallback: formatSlotOptions(slots),
+      });
+    }
+
+    return reply({
+      state,
+      userText: text,
+      intent: "local_calendar",
+      trace: [
+        {
+          agent: "RSVP Coordinator",
+          action: "Wait for user-shared local iPhone availability.",
+        },
+      ],
+      fallback: localIosCalendarInstructions(),
+    });
+  }
+
+  if (state.step === "slot_options_ready") {
+    const slot = state.slots.find((candidate) => candidate.id === text.trim());
+    if (!slot) {
+      return reply({
+        state,
+        userText: text,
+        intent: "slot_options",
+        trace: [
+          {
+            agent: "RSVP Coordinator",
+            action: "Ask user to choose one proposed slot.",
+          },
+        ],
+        fallback: "Reply with 1, 2, or 3 so I can hold that window.",
+      });
+    }
+
+    state.draft.selectedSlot = slot;
+    state.step = "event_creation_pending";
+    return reply({
+      state,
+      userText: text,
+      intent: "slot_selected",
+      trace: [
+        {
+          agent: "RSVP Coordinator",
+          action: "Confirm before preparing the local iPhone Calendar hold.",
+        },
+      ],
+      fallback: `I’ll hold ${slot.label}. Reply CREATE HOLD and I’ll prepare the room details for your iPhone Calendar.`,
+    });
+  }
+
+  if (state.step === "event_creation_pending") {
+    if (!["create hold", "create event"].includes(text.toLowerCase())) {
+      return reply({
+        state,
+        userText: text,
+        intent: "slot_selected",
+        trace: [
+          {
+            agent: "Safety & Trust",
+            action: "Require explicit approval before preparing a local hold.",
+          },
+        ],
+        fallback: "No hold is created yet. Reply CREATE HOLD when you want me to prepare it.",
+      });
+    }
+
+    const slot = state.draft.selectedSlot;
+    if (!slot) {
+      state.step = "calendar_connect_pending";
+      return reply({
+        state,
+        userText: text,
+        intent: "local_calendar",
+        trace: [
+          {
+            agent: "RSVP Coordinator",
+            action: "Recover missing selected slot.",
+          },
+        ],
+        fallback: "I lost the selected slot. Let’s check availability again.",
+      });
+    }
+
+    const venueSearch = appleMapsSearchUrl("quiet cafe near Da'an Taipei");
+    const eventTitle = `pullup: ${state.draft.purpose ?? "offline room"}`;
+    const eventNotes = [
+      `Who: ${state.draft.guests ?? "selected guests"}`,
+      `Vibe: ${state.draft.vibe ?? "thoughtful, low-pressure"}`,
+      "Private calendar details were not shared.",
+    ].join("\n");
+    const event = await createCalendarEvent(input.conversationId, {
+      summary: eventTitle,
+      description: eventNotes,
+      location: "Quiet cafe near Da'an Taipei",
+      start: slot.start,
+      end: slot.end,
+    });
+
+    state.draft.calendarEventId = event.id;
+    state.step = "event_confirmed";
+    return reply({
+      state,
+      userText: text,
+      intent: "event_created",
+      trace: [
+        {
+          agent: "RSVP Coordinator",
+          action: "Prepare local hold after explicit confirmation.",
+        },
+      ],
+      fallback: [
+        formatIphoneCalendarEventCard({
+          title: eventTitle,
+          start: slot.start,
+          end: slot.end,
+          location: "Quiet cafe near Da'an Taipei",
+          notes: eventNotes,
+        }),
+        "",
+        "Apple Maps:",
+        venueSearch,
+        "",
+        "When people are on the way, they can share live location in Messages or text ARRIVED.",
+        "For contacts, only send me a contact card, phone, or email if you want that person invited.",
+        "I’ll ask for vibe feedback after the room.",
+      ].join("\n"),
+    });
+  }
+
+  if (state.step === "event_confirmed") {
+    state.step = "feedback_pending";
+    return reply({
+      state,
+      userText: text,
+      intent: "feedback",
+      trace: [
+        {
+          agent: "RSVP Coordinator",
+          action: "Collect post-event feedback.",
+        },
+      ],
+      fallback:
+        "After the event, I’ll ask: did the timing work, did the room feel natural, and should I tune future scheduling earlier/later?",
+    });
+  }
+
   return reply({
     state,
     userText: text,
@@ -343,4 +580,11 @@ export async function runPullupAgent(
     ],
     fallback: "I’m here. What are we trying to pull together?",
   });
+}
+
+function hasAvailabilityLikeText(text: string): boolean {
+  return (
+    /\b(mon|tue|wed|thu|fri|sat|sun|tomorrow)\b/i.test(text) &&
+    /\d/.test(text)
+  );
 }
