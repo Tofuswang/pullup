@@ -1,5 +1,11 @@
 export type Channel = "terminal" | "imessage" | "unknown";
 
+export type AgentInput = {
+  conversationId: string;
+  text: string;
+  channel: Channel;
+};
+
 export type EventStatus =
   | "draft"
   | "needs_approval"
@@ -88,6 +94,11 @@ export type OutboundInvite = {
   guestId: string;
   phone: string;
   text: string;
+};
+
+export type AgentResponse = {
+  text: string;
+  outboundInvites?: OutboundInvite[];
 };
 
 export type SendResultStatus = "sent" | "target_not_allowed" | "failed";
