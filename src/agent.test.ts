@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  type PullupLlm,
   recordInviteSendResult,
   runPullupAgent,
   setPullupLlmForTesting,
@@ -9,6 +10,7 @@ import {
 import { PullupStore } from "./store/sqlite";
 
 let store: PullupStore;
+let seenContexts: Parameters<PullupLlm["generateReply"]>[0][];
 
 function input(conversationId: string, text: string, channel: "terminal" | "imessage" = "terminal") {
   return {
@@ -37,9 +39,11 @@ async function completeEventBrief() {
 describe("runPullupAgent", () => {
   beforeEach(() => {
     store = new PullupStore(":memory:");
+    seenContexts = [];
     setPullupStoreForTesting(store);
     setPullupLlmForTesting({
       async generateReply(context) {
+        seenContexts.push(context);
         return context.fallback;
       },
     });
@@ -152,6 +156,61 @@ describe("runPullupAgent", () => {
     expect(feedback.text).not.toContain("rate people");
   });
 
+  test("CommonGround START owns the turn and does not trigger host intake", async () => {
+    const conversationId = "iMessage:protocol-owner";
+
+    const start = await runPullupAgent(input(conversationId, "START", "imessage"));
+
+    expect(start.text).toContain("small first circle invited to CommonGround");
+    expect(start.text).toContain("Reply CONSENT");
+    expect(start.text).not.toContain("Who should this invite go to");
+    expect(start.text).not.toContain("Who should be invited");
+    expect(start.text).not.toContain("coffee / matcha meetup");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
+  test("LinkedIn URL is verification only, not an invite target", async () => {
+    const conversationId = "iMessage:linkedin-verification";
+
+    const response = await runPullupAgent(
+      input(conversationId, "“https://www.linkedin.com/in/vivian-chao-9a0b54198/“", "imessage"),
+    );
+
+    expect(response.text).toContain("Verified as a consented identity handle");
+    expect(response.text).toContain("AI Passport");
+    expect(response.text).not.toContain("Draft note");
+    expect(response.text).not.toContain("coffee");
+    expect(response.text).not.toContain("invite");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
+  test("LinkedIn URL during onboarding accepts smart quotes", async () => {
+    const conversationId = "iMessage:linkedin-smart-quotes";
+
+    await runPullupAgent(input(conversationId, "START", "imessage"));
+    await runPullupAgent(input(conversationId, "CONSENT", "imessage"));
+    const response = await runPullupAgent(
+      input(conversationId, "“https://www.linkedin.com/in/vivian-chao-9a0b54198/“", "imessage"),
+    );
+
+    expect(response.text).toContain("Verified as a consented identity handle");
+    expect(response.text).toContain("AI Passport");
+    expect(response.text).not.toContain("Please paste your LinkedIn profile URL");
+  });
+
+  test("slash start also enters CommonGround without host agent chime-in", async () => {
+    const conversationId = "iMessage:slash-start";
+
+    const start = await runPullupAgent(input(conversationId, "/start", "imessage"));
+
+    expect(start.text).toContain("small first circle invited to CommonGround");
+    expect(start.text).not.toContain("Who should this invite go to");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
   test("blocks send before approval, then queues approved small-batch invites", async () => {
     await completeEventBrief();
 
@@ -239,6 +298,43 @@ describe("runPullupAgent", () => {
     expect(location.text).toContain("I found this venue match");
     expect(location.text).toContain("Taipei 101");
     expect(location.text).toContain("25.033976");
+  });
+
+  test("understands Chinese date and venue in a date-planning message", async () => {
+    setPullupMapsForTesting({
+      async searchPlaces(query) {
+        expect(query).toBe("圓山");
+        return [
+          {
+            name: "圓山",
+            address: "台北市中山區圓山",
+            latitude: 25.071,
+            longitude: 121.52,
+          },
+        ];
+      },
+    });
+
+    const response = await sendHost("我想規劃一場約會，週日下午在圓山");
+
+    expect(response.text).toContain("I found this venue match");
+    expect(response.text).toContain("圓山");
+    expect(response.text).not.toContain("When is it happening");
+
+    const draft = await sendHost("/draft");
+    expect(draft.text).toContain("Title: 圓山約會");
+    expect(draft.text).toContain("Date: 週日下午");
+    expect(draft.text).toContain("Venue/location: 圓山");
+  });
+
+  test("builds a durable memory packet before LLM response", async () => {
+    await sendHost("我想規劃一場約會，週日下午在圓山");
+
+    const context = seenContexts.at(-1);
+    expect(context?.memory?.eventBrief).toContain("Title: 圓山約會");
+    expect(context?.memory?.eventBrief).toContain("Date: 週日下午");
+    expect(context?.memory?.eventBrief).toContain("Venue/location: 圓山");
+    expect(context?.memory?.recentMessages).toContain("我想規劃一場約會");
   });
 
   test("clear clears terminal output without resetting the event", async () => {
