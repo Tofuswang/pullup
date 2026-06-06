@@ -50,7 +50,7 @@ function getStore(): PullupStore {
   return storeOverride;
 }
 
-function systemPromptFor(context: ReplyContext): string {
+export function systemPromptFor(context: ReplyContext): string {
   const currentAgent = context.trace.at(-1)?.agent ?? "Host Concierge";
   return [
     `You are ${currentAgent}, one specialist inside pullup's event activation agent team.`,
@@ -63,6 +63,7 @@ function systemPromptFor(context: ReplyContext): string {
     "",
     `Intent: ${context.intent}`,
     "",
+    ...(context.memory?.docsContext ? [context.memory.docsContext, ""] : []),
     "Current durable memory:",
     context.memory?.eventBrief ?? "No active event.",
     "",

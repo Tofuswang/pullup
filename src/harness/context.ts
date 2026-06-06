@@ -1,5 +1,6 @@
 import type { Guest, GuestStatus, MessageLog, PullupEvent } from "../domain";
 import type { PullupStore } from "../store/sqlite";
+import { runtimeDocsPrompt } from "./docs";
 import type { AgentContext, AgentInput, AgentMemory } from "./types";
 
 export function buildAgentContext(
@@ -37,6 +38,7 @@ export function buildAgentMemory(
   recentMessages: MessageLog[],
 ): AgentMemory {
   return {
+    docsContext: runtimeDocsPrompt(),
     eventBrief: formatEventMemory(event),
     guestSummary: formatGuestMemory(guests),
     recentMessages: formatMessageMemory(recentMessages),

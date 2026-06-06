@@ -1,8 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { systemPromptFor } from "../agent";
 import { runCommonGroundAgent } from "../commonground";
 import { type PullupEvent } from "../domain";
 import { PullupStore } from "../store/sqlite";
 import { buildAgentContext } from "./context";
+import {
+  formatRuntimeDocsContext,
+  loadRuntimeDocsContext,
+  resetRuntimeDocsCacheForTesting,
+  runtimeDocsPrompt,
+  setRuntimeDocsContextForTesting,
+} from "./docs";
 import {
   canSendInvites,
   inviteBatchLimit,
@@ -25,6 +36,8 @@ function input(conversationId: string, text: string, channel: "terminal" | "imes
 describe("agent harness", () => {
   afterEach(() => {
     for (const store of stores.splice(0)) store.close();
+    setRuntimeDocsContextForTesting(undefined);
+    resetRuntimeDocsCacheForTesting();
   });
 
   test("routes START through CommonGround before the host flow", () => {
@@ -108,4 +121,84 @@ describe("agent harness", () => {
     expect(sendFailureStatusFromError(new Error("Target not allowed for this project"))).toBe("target_not_allowed");
     expect(sendFailureStatusFromError(new Error("network failed"))).toBe("failed");
   });
+
+  test("runtime docs loader reads only whitelisted product docs", () => {
+    const root = makeDocsRoot({
+      "AGENTS.md": "# Do not load me\npoison dev instructions",
+      "README.md": "# Do not load me\nrepo setup notes",
+      "docs/collaboration.md": "# Do not load me\ncredential workflow",
+      "docs/agent-architecture.md": "## Design Principle\nUse one orchestrator.\n\n## Ignored\nNope",
+      "docs/commonground-business-flow-v2.md": "## CommonGround Member Flow\nSTART owns onboarding.",
+      "docs/ios-local-integrations.md": "## MVP Decision\nUse local iOS handoff.",
+    });
+
+    const context = loadRuntimeDocsContext(root);
+    const prompt = formatRuntimeDocsContext(context);
+
+    expect(context.loadedFiles).toEqual([
+      "docs/agent-architecture.md",
+      "docs/commonground-business-flow-v2.md",
+      "docs/ios-local-integrations.md",
+    ]);
+    expect(prompt).toContain("Use one orchestrator");
+    expect(prompt).toContain("START owns onboarding");
+    expect(prompt).toContain("Use local iOS handoff");
+    expect(prompt).not.toContain("poison dev instructions");
+    expect(prompt).not.toContain("credential workflow");
+  });
+
+  test("runtime docs loader does not crash when docs are missing", () => {
+    const root = mkdtempSync(join(tmpdir(), "pullup-docs-missing-"));
+
+    const context = loadRuntimeDocsContext(root);
+    const prompt = formatRuntimeDocsContext(context);
+
+    expect(context.loadedFiles).toEqual([]);
+    expect(context.warnings).toHaveLength(3);
+    expect(prompt).toContain("Loaded docs: none");
+  });
+
+  test("runtime docs prompt can be disabled and capped by env", () => {
+    setRuntimeDocsContextForTesting({
+      runtimeRules: "A".repeat(100),
+      commongroundRules: "B".repeat(100),
+      iosHandoffRules: "C".repeat(100),
+      warnings: [],
+      loadedFiles: ["docs/agent-architecture.md"],
+    });
+
+    expect(runtimeDocsPrompt({ env: { PULLUP_DOCS_CONTEXT: "0" } })).toBe("");
+    expect(runtimeDocsPrompt({ env: { PULLUP_DOCS_MAX_CHARS: "80" } }).length).toBeLessThanOrEqual(80);
+    expect(runtimeDocsPrompt({ env: { PULLUP_DOCS_MAX_CHARS: "80" } })).toContain("truncated");
+  });
+
+  test("system prompt places runtime docs before durable memory", () => {
+    const prompt = systemPromptFor({
+      userText: "hello",
+      intent: "host_intake",
+      fallback: "ok",
+      trace: [],
+      memory: {
+        docsContext: "# Runtime Product Rules\nUse one orchestrator.",
+        eventBrief: "Title: Durable Event",
+        guestSummary: "No guests yet.",
+        recentMessages: "inbound/imessage: hello",
+      },
+    });
+
+    expect(prompt).toContain("# Runtime Product Rules");
+    expect(prompt.indexOf("# Runtime Product Rules")).toBeLessThan(
+      prompt.indexOf("Current durable memory:"),
+    );
+  });
 });
+
+function makeDocsRoot(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), "pullup-docs-"));
+  for (const [relativePath, content] of Object.entries(files)) {
+    const path = join(root, relativePath);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, content);
+  }
+  return root;
+}
