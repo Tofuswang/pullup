@@ -35,7 +35,7 @@ data directly, or fully automate trust and safety.
 | Recommend a room, not a person | Context Card outputs people + activity + venue + shared context + prompts | `src/commonground.ts`, `src/commonground_recommender.ts` | Multiple weekly candidate rooms and human review queue |
 | Activity chosen by interaction mechanics | Coffee/matcha with structured prompts is selected as the low-pressure container | `src/commonground_recommender.ts` | Activity inventory, venue/activity supply ranking, novelty control |
 | Safety and privacy as hard gates | Copy enforces public-first, no forced contact exchange, and private safety review | `src/commonground.ts` | Real safety incident tooling, member trust score, moderation dashboard |
-| Local iOS scheduling | User shares free windows from iPhone Calendar; app creates an iPhone Calendar-ready message card | `src/commonground.ts`, `src/ios.ts`, `src/calendar.ts` | Native EventKit permission and direct calendar writes |
+| Local iOS scheduling | User shares free windows from iPhone Calendar; app creates an iPhone Calendar-ready message card; native package can write confirmed events through EventKit write-only access | `src/commonground.ts`, `src/ios.ts`, `src/calendar.ts`, `ios/PullupCalendar/Sources/PullupCalendar/EventKitCalendarWriter.swift` | Full-access EventKit free/busy reading and complete iOS app UI |
 | Apple Maps handoff | Generates Apple Maps URL for venue planning | `src/ios.ts` | Native MapKit venue picker, live ETA, travel-time ranking |
 | iPhone location status | Copy asks user to share live/current location in Messages or text arrival status | `docs/ios-local-integrations.md`, `src/ios.ts` | Native CoreLocation permission and arrival detection |
 | iPhone Contacts handoff | Copy asks user to share a contact card/phone/email explicitly | `docs/ios-local-integrations.md`, `src/ios.ts` | Native Contacts picker and invite-only selected contacts |
@@ -106,8 +106,8 @@ Main file:
 
 Not yet implemented:
 
-- EventKit permission prompt
-- direct local Calendar read/write
+- full-access EventKit free/busy prompt
+- complete native iOS scheduling UI
 - CoreLocation permission prompt
 - live location ingestion
 - Contacts permission prompt

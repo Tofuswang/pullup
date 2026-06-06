@@ -30,6 +30,8 @@ describe("CommonGround methodology mapping", () => {
     expect(ids).toContain("apple_calendar_write_only");
     expect(permissionLadder.find((tier) => tier.id === "manual_availability")?.dataUsed)
       .toContain("no event titles");
+    expect(permissionLadder.find((tier) => tier.id === "apple_calendar_write_only")?.status)
+      .toBe("implemented_mvp");
     expect(permissionLadder.every((tier) => tier.fallback.length > 0)).toBe(true);
   });
 

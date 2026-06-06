@@ -330,7 +330,7 @@ Current repo boundary:
 - implemented: Apple Maps URL handoff
 - implemented: privacy-safe Context Cards and vibe feedback
 - implemented: code-level architecture map in `src/commonground_methodology.ts`
-- planned native: EventKit write-only event creation
+- implemented native package: EventKit write-only event creation
 - planned native: EventKit full-access conflict detection after explicit upgrade
 - planned native: CoreLocation / MapKit travel-time ranking
 - planned native: Contacts permission prompt
@@ -394,12 +394,13 @@ Current implementation:
 - finds overlapping mutual windows when multiple people are provided
 - falls back to a user-only hold if only the current user's windows are provided
 - asks for `CONFIRM ROOM`
+- native `ios/PullupCalendar` package can request EventKit write-only access
+  and create the confirmed event on-device
 
 Current limitation:
 
-- no native EventKit integration
 - no automatic multi-user free/busy API yet
-- no automatic iOS calendar write
+- no full iOS app shell wired to the native package yet
 
 ## Event Confirmation
 
@@ -545,7 +546,8 @@ Current role:
 Current limitation:
 
 - no native iOS app yet
-- no EventKit, Contacts, CoreLocation, or MapKit permissions yet
+- no Contacts, CoreLocation, or MapKit permissions yet
+- no full-access EventKit permission for free/busy conflict detection yet
 
 ## What Is Built Now
 

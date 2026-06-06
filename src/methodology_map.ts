@@ -62,9 +62,14 @@ export function getMethodologyMvpMap(): MethodologyMvpMapEntry[] {
     {
       claim: "Local iOS scheduling handoff",
       status: "implemented",
-      mvpImplementation: "Users send free windows from iPhone Calendar; the app prepares an iPhone Calendar-ready card.",
-      files: ["src/commonground.ts", "src/ios.ts", "src/calendar.ts"],
-      notYetReal: ["EventKit permission", "direct local Calendar read/write"],
+      mvpImplementation: "Users send free windows from iPhone Calendar; the app prepares an iPhone Calendar-ready card, and the native iOS package can request EventKit write-only access to create confirmed events.",
+      files: [
+        "src/commonground.ts",
+        "src/ios.ts",
+        "src/calendar.ts",
+        "ios/PullupCalendar/Sources/PullupCalendar/EventKitCalendarWriter.swift",
+      ],
+      notYetReal: ["full-access conflict detection", "Calendar picker UI inside a complete iOS app target"],
     },
     {
       claim: "Apple Maps, location, and Contacts handoff",

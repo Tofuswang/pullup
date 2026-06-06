@@ -111,8 +111,9 @@ methodology, current MVP code, and future native/ML work.
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
 handoffs, shared data objects, and MVP build milestones.
 
-See `docs/ios-local-integrations.md` for the local iPhone Calendar, Apple Maps,
-location status, and Contacts handoff plan.
+See `docs/ios-local-integrations.md` for the local iPhone Calendar flow,
+EventKit write-only event creation, Apple Maps, location status, and Contacts
+handoff plan.
 
 ## Collaboration
 

@@ -8,7 +8,8 @@ describe("methodology MVP map", () => {
     expect(entries.length).toBeGreaterThan(5);
     expect(entries.some((entry) => entry.claim.includes("LinkedIn"))).toBe(true);
     expect(entries.some((entry) => entry.files.includes("src/commonground_recommender.ts"))).toBe(true);
-    expect(entries.some((entry) => entry.notYetReal.includes("EventKit permission"))).toBe(true);
+    expect(entries.some((entry) => entry.files.includes("ios/PullupCalendar/Sources/PullupCalendar/EventKitCalendarWriter.swift"))).toBe(true);
+    expect(entries.some((entry) => entry.notYetReal.includes("full-access conflict detection"))).toBe(true);
   });
 
   test("formats a pitch-safe methodology summary", () => {

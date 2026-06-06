@@ -102,7 +102,7 @@ export const permissionLadder: PermissionTier[] = [
     id: "apple_calendar_write_only",
     label: "Apple Calendar write-only event creation",
     dataUsed: ["confirmed event details only"],
-    status: "planned_native",
+    status: "implemented_mvp",
     fallback: "iMessage calendar-ready event card.",
   },
   {
@@ -177,8 +177,13 @@ export function methodologyCoverage(): MethodologyCoverageItem[] {
     {
       requirement: "Deterministic scheduling truth, not AI guessing",
       status: "implemented_mvp",
-      evidence: ["parseAvailabilityWindows", "findMutualSlots", "formatIphoneCalendarEventCard"],
-      gap: "Native EventKit free/busy and write-only event creation require an iOS app target.",
+      evidence: [
+        "parseAvailabilityWindows",
+        "findMutualSlots",
+        "formatIphoneCalendarEventCard",
+        "EventKitCalendarWriter",
+      ],
+      gap: "Full-access EventKit free/busy conflict detection still requires the complete iOS app target.",
     },
     {
       requirement: "AI-driven explanation, memory, and social orchestration",
