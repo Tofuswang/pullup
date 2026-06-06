@@ -226,6 +226,30 @@ describe("runPullupAgent", () => {
     expect(send.outboundInvites?.[0]?.phone).toBe("+886976964336");
   });
 
+  test("does not overwrite an approval draft with casual follow-up text", async () => {
+    await completeEventBrief();
+    const before = store.getActiveEventForHost("Terminal:host")!;
+
+    const response = await sendHost("Hey");
+    const after = store.getActiveEventForHost("Terminal:host")!;
+
+    expect(response.text).toContain("waiting for approval");
+    expect(after.title).toBe(before.title);
+    expect(after.date).toBe(before.date);
+    expect(after.inviteDraft).toBe(before.inviteDraft);
+  });
+
+  test("allows explicit labeled edits while an approval draft is pending", async () => {
+    await completeEventBrief();
+
+    const response = await sendHost("title: Better Workshop");
+    const event = store.getActiveEventForHost("Terminal:host")!;
+
+    expect(response.text).toContain("Better Workshop");
+    expect(event.title).toBe("Better Workshop");
+    expect(event.inviteDraft).toContain("Better Workshop");
+  });
+
   test("records target-not-allowed failures without crashing the batch", async () => {
     await completeEventBrief();
     await sendHost("/approve");

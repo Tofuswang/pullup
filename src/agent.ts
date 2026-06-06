@@ -50,7 +50,7 @@ function getStore(): PullupStore {
   return storeOverride;
 }
 
-function systemPromptFor(context: ReplyContext): string {
+export function systemPromptFor(context: ReplyContext): string {
   const currentAgent = context.trace.at(-1)?.agent ?? "Host Concierge";
   return [
     `You are ${currentAgent}, one specialist inside pullup's event activation agent team.`,
@@ -63,6 +63,7 @@ function systemPromptFor(context: ReplyContext): string {
     "",
     `Intent: ${context.intent}`,
     "",
+    ...(context.memory?.docsContext ? [context.memory.docsContext, ""] : []),
     "Current durable memory:",
     context.memory?.eventBrief ?? "No active event.",
     "",
@@ -262,6 +263,22 @@ async function continueHostIntake(
   showTrace: boolean,
 ): Promise<AgentResponse> {
   const updates = extractBriefUpdates(event, text);
+  if (event.status === "needs_approval" && Object.keys(updates).length === 0) {
+    return reply(
+      {
+        event,
+        userText: text,
+        intent: "draft",
+        trace: trace({
+          agent: "Safety & Trust",
+          action: "Keep the approval draft unchanged because the host did not send an explicit edit.",
+        }),
+        fallback: `${formatDraft(event, store.listGuests(event.id))}\n\nThis draft is waiting for approval. Reply /approve to approve it, or send an explicit edit like "title: New title".`,
+      },
+      { showTrace },
+    );
+  }
+
   let updated = store.updateEvent(event.id, updates);
   const venueLookup = await maybeEnrichVenue(store, updated, updates);
   if (venueLookup?.event) updated = venueLookup.event;
@@ -588,7 +605,7 @@ function guestReplyFor(status: Guest["rsvpStatus"]): string {
 }
 
 function extractBriefUpdates(event: PullupEvent, text: string): Partial<EventBrief> {
-  const field = missingBriefFields(event)[0] ?? "title";
+  const field = missingBriefFields(event)[0];
   const updates: Partial<EventBrief> = {};
   const labelUpdates = parseLabeledFields(text);
   Object.assign(updates, labelUpdates);

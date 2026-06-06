@@ -25,6 +25,7 @@ export type AgentMemory = {
   eventBrief: string;
   guestSummary: string;
   recentMessages: string;
+  docsContext?: string;
 };
 
 export type ReplyIntent =
