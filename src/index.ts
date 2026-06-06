@@ -1,7 +1,14 @@
 import { Spectrum } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { terminal } from "spectrum-ts/providers/terminal";
-import { runPullupAgent, type AgentInput } from "./agent";
+import {
+  recordOutboundInviteMessage,
+  recordInviteSendResult,
+  runPullupAgent,
+  type AgentInput,
+  type AgentResponse,
+} from "./agent";
+import type { OutboundInvite } from "./domain";
 
 const providerMode = process.env.PULLUP_PROVIDERS ?? "terminal";
 const telemetryEnabled = process.env.PULLUP_SPECTRUM_TELEMETRY !== "0";
@@ -34,6 +41,9 @@ const app = await Spectrum({
   providers,
   telemetry: telemetryEnabled,
 });
+const imessageClient = providerMode === "imessage" || providerMode === "both"
+  ? imessage(app)
+  : undefined;
 
 // `app.messages` is an async iterable. Each tick yields a `space` (the
 // conversation) and an inbound `message`. Reply by awaiting `space.send(...)`.
@@ -56,6 +66,40 @@ for await (const [space, message] of app.messages) {
 
     const response = await runPullupAgent(input);
     await space.send(response.text);
+    await sendOutboundInvites(response);
     console.log(`[pullup] outbound platform=${space.__platform} space=${space.id}`);
+  }
+}
+
+async function sendOutboundInvites(response: AgentResponse): Promise<void> {
+  if (!response.outboundInvites?.length) return;
+
+  if (!imessageClient) {
+    console.log(
+      `[pullup] queued ${response.outboundInvites.length} invite(s); iMessage provider is not enabled`,
+    );
+    return;
+  }
+
+  for (const invite of response.outboundInvites) {
+    await sendOneInvite(invite);
+  }
+}
+
+async function sendOneInvite(invite: OutboundInvite): Promise<void> {
+  try {
+    const user = await imessageClient!.user(invite.phone);
+    const dm = await imessageClient!.space(user);
+    await dm.send(invite.text);
+    recordOutboundInviteMessage(invite, "imessage");
+    recordInviteSendResult(invite.guestId, "sent");
+    console.log(`[pullup] invite sent guest=${invite.guestId}`);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    const status = details.includes("Target not allowed")
+      ? "target_not_allowed"
+      : "failed";
+    recordInviteSendResult(invite.guestId, status);
+    console.error(`[pullup] invite failed guest=${invite.guestId} status=${status}`);
   }
 }

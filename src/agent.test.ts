@@ -1,16 +1,42 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { runPullupAgent, setPullupLlmForTesting } from "./agent";
+import {
+  recordInviteSendResult,
+  runPullupAgent,
+  setPullupLlmForTesting,
+  setPullupStoreForTesting,
+} from "./agent";
+import { PullupStore } from "./store/sqlite";
 
-function input(conversationId: string, text: string) {
+let store: PullupStore;
+
+function input(conversationId: string, text: string, channel: "terminal" | "imessage" = "terminal") {
   return {
     conversationId,
     text,
-    channel: "terminal" as const,
+    channel,
   };
+}
+
+async function sendHost(text: string) {
+  return runPullupAgent(input("Terminal:host", text));
+}
+
+async function completeEventBrief() {
+  await sendHost("Vibe Coding Workshop for PMs & Designers next thursday, in-person, 20 people");
+  await sendHost("free");
+  await sendHost("Product managers, UI/UX designers, and product designers");
+  await sendHost("Help them build real AI prototypes faster without waiting for an engineering team");
+  await sendHost("They will learn Cursor, Replit, AI prototyping patterns, and shareable prototype workflows");
+  await sendHost("They will build a computer vision app flow and test a working prototype");
+  await sendHost("Save your seat");
+  await sendHost("Taipei founder space");
+  return sendHost("Alex +886976964336, Sam +886912345678");
 }
 
 describe("runPullupAgent", () => {
   beforeEach(() => {
+    store = new PullupStore(":memory:");
+    setPullupStoreForTesting(store);
     setPullupLlmForTesting({
       async generateReply(context) {
         return context.fallback;
@@ -20,66 +46,80 @@ describe("runPullupAgent", () => {
 
   afterEach(() => {
     setPullupLlmForTesting(undefined);
+    setPullupStoreForTesting(undefined);
+    store.close();
   });
 
-  test("guides a host from loose event idea to first pullup draft", async () => {
-    const conversationId = "test:event-flow";
-
-    const first = await runPullupAgent(
-      input(conversationId, "help me host a founder dinner next thursday"),
-    );
+  test("collects Linear event template fields and creates an approval-gated draft", async () => {
+    const first = await sendHost("I want to run a Vibe Coding Workshop next thursday for 20 designers");
     expect(first.text).toContain("[agent trace]");
     expect(first.text).toContain("Host Concierge");
-    expect(first.text).toContain("Event Strategist");
-    expect(first.text).toContain("Who should come?");
+    expect(first.text).toContain("online, in-person, or hybrid");
 
-    const guests = await runPullupAgent(
-      input(conversationId, "seed founders and product leaders in taipei"),
-    );
-    expect(guests.text).toContain("What’s the vibe");
-
-    const draft = await runPullupAgent(
-      input(conversationId, "intimate dinner, useful but not salesy"),
-    );
-    expect(draft.text).toContain("Invite Copy");
-    expect(draft.text).toContain("Safety & Trust");
-    expect(draft.text).toContain("Here’s the first pullup draft");
-    expect(draft.text).toContain("Who: seed founders and product leaders in taipei");
-    expect(draft.text).toContain(
-      "What: help me host a founder dinner next thursday",
-    );
-    expect(draft.text).toContain("Vibe: intimate dinner, useful but not salesy");
+    const draft = await completeEventBrief();
+    expect(draft.text).toContain("Current pullup draft");
+    expect(draft.text).toContain("Vibe Coding Workshop");
+    expect(draft.text).toContain("Invite draft");
+    expect(draft.text).toContain("/approve");
   });
 
-  test("does not start an event flow from unrelated chatter", async () => {
-    const response = await runPullupAgent(input("test:chatter", "hello"));
+  test("blocks send before approval, then queues approved small-batch invites", async () => {
+    await completeEventBrief();
 
-    expect(response.text).toContain("Tell me what you want to bring people out for");
+    const blocked = await sendHost("/send");
+    expect(blocked.text).toContain("reply /approve first");
+
+    const approved = await sendHost("/approve");
+    expect(approved.text).toContain("Approved");
+
+    const send = await sendHost("/send");
+    expect(send.text).toContain("Queued 2 invites");
+    expect(send.outboundInvites).toHaveLength(2);
+    expect(send.outboundInvites?.[0]?.phone).toBe("+886976964336");
   });
 
-  test("reset clears conversation state", async () => {
-    const conversationId = "test:reset";
+  test("records target-not-allowed failures without crashing the batch", async () => {
+    await completeEventBrief();
+    await sendHost("/approve");
+    const send = await sendHost("/send");
+    const firstInvite = send.outboundInvites![0]!;
 
-    await runPullupAgent(input(conversationId, "plan a launch party"));
-    const reset = await runPullupAgent(input(conversationId, "/reset"));
-    expect(reset.text).toContain("Reset");
+    recordInviteSendResult(firstInvite.guestId, "target_not_allowed");
 
-    const afterReset = await runPullupAgent(input(conversationId, "alex and sam"));
-    expect(afterReset.text).toContain("Tell me what you want to bring people out for");
+    const status = await sendHost("/status");
+    expect(status.text).toContain("Send failures: 1");
   });
 
-  test("uses the configured LLM when available", async () => {
-    setPullupLlmForTesting({
-      async generateReply(context) {
-        return `llm:${context.intent}:${context.state.step}`;
-      },
-    });
+  test("guest replies update RSVP status", async () => {
+    await completeEventBrief();
+    await sendHost("/approve");
+    const send = await sendHost("/send");
+    const invite = send.outboundInvites![0]!;
+    recordInviteSendResult(invite.guestId, "sent");
 
-    const response = await runPullupAgent(
-      input("test:llm", "help me host a supper club"),
+    const guestReply = await runPullupAgent(
+      input("iMessage:any;-;+886976964336", "yes, save me a seat", "imessage"),
     );
+    expect(guestReply.text).toContain("confirmed");
 
-    expect(response.text).toContain("llm:ask_guests:collecting_guests");
+    const status = await sendHost("/status");
+    expect(status.text).toContain("Confirmed: 1");
+  });
+
+  test("guest stop opts out", async () => {
+    await completeEventBrief();
+    await sendHost("/approve");
+    const send = await sendHost("/send");
+    const invite = send.outboundInvites![0]!;
+    recordInviteSendResult(invite.guestId, "sent");
+
+    const guestReply = await runPullupAgent(
+      input("iMessage:any;-;+886976964336", "stop", "imessage"),
+    );
+    expect(guestReply.text).toContain("won't message you");
+
+    const status = await sendHost("/status");
+    expect(status.text).toContain("Opted out: 1");
   });
 
   test("loops through local iPhone Calendar availability after approval", async () => {

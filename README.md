@@ -58,6 +58,20 @@ PULLUP_PROVIDERS=both bun start
 The product logic lives in `src/agent.ts`. Keep channel-specific concerns in
 `src/index.ts` so the same agent can run in the TUI while iMessage is flaky.
 
+The MVP persists event, guest, approval, message, and agent-task state in
+SQLite. By default the local database is `./data/pullup.sqlite`; override it
+with `PULLUP_DB_PATH`.
+
+Host commands:
+
+```sh
+/draft    # show the current event brief and invite draft
+/approve  # approve the current invite draft
+/send     # send approved invites to the small-batch guest list
+/status   # show RSVP summary
+/reset    # cancel the active draft and restart
+```
+
 ## Agent design
 
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
