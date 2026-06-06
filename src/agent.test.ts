@@ -170,6 +170,36 @@ describe("runPullupAgent", () => {
     expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
   });
 
+  test("LinkedIn URL is verification only, not an invite target", async () => {
+    const conversationId = "iMessage:linkedin-verification";
+
+    const response = await runPullupAgent(
+      input(conversationId, "“https://www.linkedin.com/in/vivian-chao-9a0b54198/“", "imessage"),
+    );
+
+    expect(response.text).toContain("Verified as a consented identity handle");
+    expect(response.text).toContain("AI Passport");
+    expect(response.text).not.toContain("Draft note");
+    expect(response.text).not.toContain("coffee");
+    expect(response.text).not.toContain("invite");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
+  test("LinkedIn URL during onboarding accepts smart quotes", async () => {
+    const conversationId = "iMessage:linkedin-smart-quotes";
+
+    await runPullupAgent(input(conversationId, "START", "imessage"));
+    await runPullupAgent(input(conversationId, "CONSENT", "imessage"));
+    const response = await runPullupAgent(
+      input(conversationId, "“https://www.linkedin.com/in/vivian-chao-9a0b54198/“", "imessage"),
+    );
+
+    expect(response.text).toContain("Verified as a consented identity handle");
+    expect(response.text).toContain("AI Passport");
+    expect(response.text).not.toContain("Please paste your LinkedIn profile URL");
+  });
+
   test("slash start also enters CommonGround without host agent chime-in", async () => {
     const conversationId = "iMessage:slash-start";
 

@@ -72,12 +72,22 @@ const demoPeople: DemoUser[] = [
 
 export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefined {
   const text = input.text.trim();
-  const normalized = text.toLowerCase();
+  const cleanText = cleanUserText(text);
+  const normalized = cleanText.toLowerCase();
   const state = states.get(input.conversationId);
 
   if (["/reset", "reset"].includes(normalized) && state) {
     states.delete(input.conversationId);
     return { text: "Reset. Text START when you want to re-enter CommonGround." };
+  }
+
+  if (!state && isLinkedinUrl(cleanText)) {
+    const fresh: CommonGroundState = {
+      step: "awaiting_passport",
+      linkedinUrl: cleanText,
+    };
+    states.set(input.conversationId, fresh);
+    return { text: aiPassportPrompt() };
   }
 
   if (!state && !startsCommonGroundFlow(normalized)) return undefined;
@@ -97,12 +107,12 @@ export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefin
       return { text: linkedinPrompt() };
 
     case "awaiting_linkedin":
-      if (!isLinkedinUrl(text)) {
+      if (!isLinkedinUrl(cleanText)) {
         return {
           text: "Please paste your LinkedIn profile URL. We use it only as a true-person verification handle, not for scraping or matching facts.",
         };
       }
-      state.linkedinUrl = text;
+      state.linkedinUrl = cleanText;
       state.step = "awaiting_passport";
       return { text: aiPassportPrompt() };
 
@@ -405,5 +415,12 @@ function feedbackPrompt(): string {
 }
 
 function isLinkedinUrl(text: string): boolean {
-  return /^https?:\/\/(www\.)?linkedin\.com\/in\/[A-Za-z0-9_.%-]+\/?/i.test(text.trim());
+  return /^https?:\/\/(www\.)?linkedin\.com\/in\/[A-Za-z0-9_.%-]+\/?/i.test(cleanUserText(text));
+}
+
+function cleanUserText(text: string): string {
+  return text
+    .trim()
+    .replace(/^[“”"'`]+|[“”"'`]+$/g, "")
+    .trim();
 }
