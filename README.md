@@ -101,6 +101,9 @@ Host commands:
 See `docs/commonground-business-flow-v2.md` for the current CommonGround V2
 business flow mapped to the GitHub code infrastructure.
 
+See `docs/methodology-to-mvp-map.md` for the exact mapping between research
+methodology, current MVP code, and future native/ML work.
+
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
 handoffs, shared data objects, and MVP build milestones.
 
