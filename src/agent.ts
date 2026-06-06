@@ -4,6 +4,8 @@ import type {
   Channel,
   EventBrief,
   Guest,
+  GuestStatus,
+  MessageLog,
   OutboundInvite,
   PullupEvent,
 } from "./domain";
@@ -31,9 +33,16 @@ export type AgentResponse = {
   outboundInvites?: OutboundInvite[];
 };
 
+type AgentMemory = {
+  eventBrief: string;
+  guestSummary: string;
+  recentMessages: string;
+};
+
 type ReplyContext = {
   event?: PullupEvent;
   guest?: Guest;
+  memory?: AgentMemory;
   userText: string;
   fallback: string;
   intent:
@@ -69,7 +78,6 @@ function getStore(): PullupStore {
 
 function systemPromptFor(context: ReplyContext): string {
   const currentAgent = context.trace.at(-1)?.agent ?? "Host Concierge";
-  const event = context.event;
   return [
     `You are ${currentAgent}, one specialist inside pullup's event activation agent team.`,
     "pullup helps hosts and brands turn loose event ideas into real gatherings.",
@@ -80,12 +88,15 @@ function systemPromptFor(context: ReplyContext): string {
     "Do not mention internal agent names in the user-facing text.",
     "",
     `Intent: ${context.intent}`,
-    `Title: ${event?.title ?? "unknown"}`,
-    `Date: ${event?.date ?? "unknown"}`,
-    `Format: ${event?.format ?? "unknown"}`,
-    `Audience: ${event?.audience ?? "unknown"}`,
-    `Venue/location: ${event?.venueOrLocation ?? "unknown"}`,
-    `Status: ${event?.status ?? "none"}`,
+    "",
+    "Current durable memory:",
+    context.memory?.eventBrief ?? "No active event.",
+    "",
+    "Guest state:",
+    context.memory?.guestSummary ?? "No guests yet.",
+    "",
+    "Recent conversation:",
+    context.memory?.recentMessages ?? "No recent messages.",
   ].join("\n");
 }
 
@@ -128,12 +139,13 @@ async function reply(
   context: ReplyContext,
   options: { showTrace: boolean; outboundInvites?: OutboundInvite[] },
 ): Promise<AgentResponse> {
+  const enrichedContext = context.memory ? context : withMemory(context);
   const generatedText =
-    !llmOverride && shouldUseScriptedReply(context.intent)
-      ? context.fallback
-      : await (llmOverride ?? defaultLlm()).generateReply(context);
+    !llmOverride && shouldUseScriptedReply(enrichedContext.intent)
+      ? enrichedContext.fallback
+      : await (llmOverride ?? defaultLlm()).generateReply(enrichedContext);
   const text = options.showTrace
-    ? `${formatTrace(context.trace)}${generatedText}`
+    ? `${formatTrace(enrichedContext.trace)}${generatedText}`
     : generatedText;
 
   return {
@@ -152,6 +164,88 @@ function shouldUseScriptedReply(intent: ReplyContext["intent"]): boolean {
     "reset",
     "guest_rsvp",
   ].includes(intent);
+}
+
+function withMemory(context: ReplyContext): ReplyContext {
+  if (!context.event) return context;
+
+  const store = getStore();
+  const guests = store.listGuests(context.event.id);
+  const messages = store.listRecentMessages(context.event.id, 10);
+
+  return {
+    ...context,
+    memory: {
+      eventBrief: formatEventMemory(context.event),
+      guestSummary: formatGuestMemory(guests),
+      recentMessages: formatMessageMemory(messages),
+    },
+  };
+}
+
+function formatEventMemory(event: PullupEvent): string {
+  return [
+    `Status: ${event.status}`,
+    `Title: ${event.title ?? "missing"}`,
+    `Date: ${event.date ?? "missing"}`,
+    `Format: ${event.format ?? "missing"}`,
+    `Cost: ${event.cost ?? "missing"}`,
+    `Audience: ${event.audience ?? "missing"}`,
+    `Why join: ${event.whyJoin ?? "missing"}`,
+    `What attendees learn: ${event.whatAttendeesLearn ?? "missing"}`,
+    `What attendees build/do: ${event.whatAttendeesBuildOrDo ?? "missing"}`,
+    `CTA: ${event.reserveSpotCta ?? "missing"}`,
+    `Venue/location: ${event.venueOrLocation ?? "missing"}`,
+    `Capacity: ${event.capacity ?? "missing"}`,
+    `Guest list raw: ${event.guestListRaw ?? "missing"}`,
+    `Invite draft: ${event.inviteDraft ?? "missing"}`,
+  ].join("\n");
+}
+
+function formatGuestMemory(guests: Guest[]): string {
+  if (guests.length === 0) return "No guests yet.";
+  const summary = guests.reduce(
+    (counts, guest) => {
+      counts[guest.rsvpStatus] += 1;
+      return counts;
+    },
+    emptyGuestSummary(),
+  );
+  const sample = guests
+    .slice(0, 8)
+    .map((guest) => `${guest.name ?? guest.phone ?? "unknown"}: rsvp=${guest.rsvpStatus}, send=${guest.sendStatus}`)
+    .join("\n");
+  return [
+    `Total guests: ${guests.length}`,
+    `Confirmed: ${summary.confirmed}`,
+    `Maybe: ${summary.maybe}`,
+    `Declined: ${summary.declined}`,
+    `Interested: ${summary.interested}`,
+    `Invited: ${summary.invited}`,
+    `Opted out: ${summary.opted_out}`,
+    sample,
+  ].filter(Boolean).join("\n");
+}
+
+function formatMessageMemory(messages: MessageLog[]): string {
+  if (messages.length === 0) return "No recent messages.";
+  return messages
+    .map((message) => `${message.direction}/${message.channel}: ${message.body}`)
+    .join("\n");
+}
+
+function emptyGuestSummary(): Record<GuestStatus, number> {
+  return {
+    not_invited: 0,
+    invited: 0,
+    interested: 0,
+    confirmed: 0,
+    declined: 0,
+    maybe: 0,
+    send_failed_target_not_allowed: 0,
+    opted_out: 0,
+    needs_human: 0,
+  };
 }
 
 export function setPullupLlmForTesting(llm: PullupLlm | undefined): void {
@@ -569,20 +663,42 @@ function extractBriefUpdates(event: PullupEvent, text: string): Partial<EventBri
   const labelUpdates = parseLabeledFields(text);
   Object.assign(updates, labelUpdates);
 
-  if (Object.keys(updates).length === 0) {
-    updates[field] = coerceFieldValue(field, text) as never;
+  const genericField = Object.keys(updates).length === 0 ? field : undefined;
+  if (genericField) {
+    updates[genericField] = coerceFieldValue(genericField, text) as never;
   }
 
   if (!updates.date) {
-    const date = text.match(/\b(next\s+\w+|tomorrow|today|tonight|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2})\b/i)?.[0];
+    const date = extractDatePhrase(text);
     if (date && !event.date) updates.date = date;
+  } else if (genericField === "date") {
+    const date = extractDatePhrase(text);
+    if (date && !event.date) updates.date = date;
+  }
+
+  const venue = extractVenuePhrase(text);
+  if (venue && !event.venueOrLocation && (!updates.venueOrLocation || genericField === "venueOrLocation")) {
+    updates.venueOrLocation = venue;
+  }
+
+  const title = inferTitle(text, updates.venueOrLocation);
+  if (title && !event.title && (!updates.title || genericField === "title")) {
+    updates.title = title;
   }
 
   if (!updates.format) {
     const lower = text.toLowerCase();
     if (lower.includes("hybrid")) updates.format = "hybrid";
     else if (lower.includes("online") || lower.includes("virtual")) updates.format = "online";
-    else if (lower.includes("in-person") || lower.includes("offline") || lower.includes("dinner")) updates.format = "in-person";
+    else if (
+      lower.includes("in-person") ||
+      lower.includes("offline") ||
+      lower.includes("dinner") ||
+      text.includes("約會") ||
+      text.includes("在")
+    ) {
+      updates.format = "in-person";
+    }
   }
 
   if (!updates.capacity) {
@@ -594,6 +710,33 @@ function extractBriefUpdates(event: PullupEvent, text: string): Partial<EventBri
   if (phones.length > 0 && !event.guestListRaw) updates.guestListRaw = text;
 
   return updates;
+}
+
+function extractDatePhrase(text: string): string | undefined {
+  const english = text.match(/\b(next\s+\w+|tomorrow|today|tonight|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2})\b/i)?.[0];
+  const chineseWeekday = text.match(/(?:這|本|下)?(?:週|周|星期|禮拜)[一二三四五六日天](?:早上|上午|中午|下午|晚上|晚間|傍晚)?/u)?.[0];
+  const relativeChinese = text.match(/(?:今天|明天|後天|今晚|明晚|週末|周末)(?:早上|上午|中午|下午|晚上|晚間|傍晚)?/u)?.[0];
+  const explicitChinese = text.match(/\d{1,2}[\/月]\d{1,2}(?:日|號)?(?:早上|上午|中午|下午|晚上|晚間|傍晚)?/u)?.[0];
+  return chineseWeekday ?? relativeChinese ?? explicitChinese ?? english;
+}
+
+function extractVenuePhrase(text: string): string | undefined {
+  const labeled = text.match(/(?:地點|venue|location)[：:\s]+([^，,。.;\n]+)/iu)?.[1]?.trim();
+  if (labeled) return labeled;
+
+  const afterAt = text.match(/(?:在|到|去)\s*([^，,。.;\n]+?)(?:的(?:資訊|地方|附近)?|辦|見|碰面|約|$)/u)?.[1]?.trim();
+  if (!afterAt) return undefined;
+
+  return afterAt
+    .replace(/^(這個|那個)/u, "")
+    .replace(/(?:附近|一帶)$/u, "")
+    .trim();
+}
+
+function inferTitle(text: string, venue?: string): string | undefined {
+  if (text.includes("約會")) return venue ? `${venue}約會` : "約會";
+  if (text.toLowerCase().includes("date")) return venue ? `${venue} date` : "date";
+  return undefined;
 }
 
 function parseLabeledFields(text: string): Partial<EventBrief> {

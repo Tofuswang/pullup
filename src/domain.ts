@@ -59,6 +59,17 @@ export type Guest = {
   updatedAt: string;
 };
 
+export type MessageLog = {
+  id: string;
+  eventId?: string;
+  guestId?: string;
+  conversationId: string;
+  direction: "inbound" | "outbound";
+  channel: string;
+  body: string;
+  createdAt: string;
+};
+
 export type AgentName =
   | "Host Concierge"
   | "Event Strategist"

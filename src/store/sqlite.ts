@@ -8,6 +8,7 @@ import type {
   EventStatus,
   Guest,
   GuestStatus,
+  MessageLog,
   PullupEvent,
   SendResultStatus,
 } from "../domain";
@@ -44,6 +45,17 @@ type GuestRow = {
   send_status: GuestStatus;
   created_at: string;
   updated_at: string;
+};
+
+type MessageRow = {
+  id: string;
+  event_id: string | null;
+  guest_id: string | null;
+  conversation_id: string;
+  direction: "inbound" | "outbound";
+  channel: string;
+  body: string;
+  created_at: string;
 };
 
 export class PullupStore {
@@ -265,6 +277,19 @@ export class PullupStore {
       );
   }
 
+  listRecentMessages(eventId: string, limit = 10): MessageLog[] {
+    const rows = this.db
+      .query(
+        `SELECT * FROM messages
+         WHERE event_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      )
+      .all(eventId, limit) as MessageRow[];
+
+    return rows.reverse().map(mapMessage);
+  }
+
   logAgentTask(input: {
     eventId?: string;
     agent: string;
@@ -429,6 +454,19 @@ function mapGuest(row: GuestRow): Guest {
     sendStatus: row.send_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapMessage(row: MessageRow): MessageLog {
+  return {
+    id: row.id,
+    eventId: row.event_id ?? undefined,
+    guestId: row.guest_id ?? undefined,
+    conversationId: row.conversation_id,
+    direction: row.direction,
+    channel: row.channel,
+    body: row.body,
+    createdAt: row.created_at,
   };
 }
 

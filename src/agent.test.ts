@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  type PullupLlm,
   recordInviteSendResult,
   runPullupAgent,
   setPullupLlmForTesting,
@@ -9,6 +10,7 @@ import {
 import { PullupStore } from "./store/sqlite";
 
 let store: PullupStore;
+let seenContexts: Parameters<PullupLlm["generateReply"]>[0][];
 
 function input(conversationId: string, text: string, channel: "terminal" | "imessage" = "terminal") {
   return {
@@ -37,9 +39,11 @@ async function completeEventBrief() {
 describe("runPullupAgent", () => {
   beforeEach(() => {
     store = new PullupStore(":memory:");
+    seenContexts = [];
     setPullupStoreForTesting(store);
     setPullupLlmForTesting({
       async generateReply(context) {
+        seenContexts.push(context);
         return context.fallback;
       },
     });
@@ -239,6 +243,43 @@ describe("runPullupAgent", () => {
     expect(location.text).toContain("I found this venue match");
     expect(location.text).toContain("Taipei 101");
     expect(location.text).toContain("25.033976");
+  });
+
+  test("understands Chinese date and venue in a date-planning message", async () => {
+    setPullupMapsForTesting({
+      async searchPlaces(query) {
+        expect(query).toBe("圓山");
+        return [
+          {
+            name: "圓山",
+            address: "台北市中山區圓山",
+            latitude: 25.071,
+            longitude: 121.52,
+          },
+        ];
+      },
+    });
+
+    const response = await sendHost("我想規劃一場約會，週日下午在圓山");
+
+    expect(response.text).toContain("I found this venue match");
+    expect(response.text).toContain("圓山");
+    expect(response.text).not.toContain("When is it happening");
+
+    const draft = await sendHost("/draft");
+    expect(draft.text).toContain("Title: 圓山約會");
+    expect(draft.text).toContain("Date: 週日下午");
+    expect(draft.text).toContain("Venue/location: 圓山");
+  });
+
+  test("builds a durable memory packet before LLM response", async () => {
+    await sendHost("我想規劃一場約會，週日下午在圓山");
+
+    const context = seenContexts.at(-1);
+    expect(context?.memory?.eventBrief).toContain("Title: 圓山約會");
+    expect(context?.memory?.eventBrief).toContain("Date: 週日下午");
+    expect(context?.memory?.eventBrief).toContain("Venue/location: 圓山");
+    expect(context?.memory?.recentMessages).toContain("我想規劃一場約會");
   });
 
   test("clear clears terminal output without resetting the event", async () => {
