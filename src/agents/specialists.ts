@@ -6,10 +6,6 @@ export const requiredBriefFields: Array<keyof EventBrief> = [
   "format",
   "cost",
   "audience",
-  "whyJoin",
-  "whatAttendeesLearn",
-  "whatAttendeesBuildOrDo",
-  "reserveSpotCta",
   "venueOrLocation",
   "capacity",
   "guestListRaw",
@@ -25,29 +21,29 @@ export function missingBriefFields(event: PullupEvent): Array<keyof EventBrief> 
 export function nextBriefQuestion(field: keyof EventBrief): string {
   switch (field) {
     case "title":
-      return "What should we call this event?";
+      return "What are we pulling together? A rough name or vibe is enough.";
     case "date":
-      return "When is it happening? A rough date/time is enough.";
+      return "When should it happen? Rough is fine, like Sunday afternoon or next Thursday night.";
     case "format":
-      return "Is this online, in-person, or hybrid?";
+      return "Is this meant to be in person, online, or hybrid?";
     case "cost":
-      return "Is it free or paid?";
+      return "Should guests expect this to be free, paid, or split the bill?";
     case "audience":
-      return "Who is this for?";
+      return "Who should be in the room? Give me the type of people, not a perfect list yet.";
     case "whyJoin":
-      return "Why should people show up?";
+      return "What is the main reason someone would be excited to show up?";
     case "whatAttendeesLearn":
-      return "What will attendees learn or take away?";
+      return "What should people leave with: new friends, useful notes, a demo, a decision, or something else?";
     case "whatAttendeesBuildOrDo":
-      return "What will attendees build, do, or experience during it?";
+      return "What will people actually do there?";
     case "reserveSpotCta":
-      return "What should the CTA be: save a seat, RSVP, apply, or something else?";
+      return "What should I ask them to do: RSVP yes, save a seat, or say if they're interested?";
     case "venueOrLocation":
-      return "Share your current/live location in Messages, or send a venue / Apple Maps link if you already chose one. You do not need to type a neighborhood.";
+      return "Where should this happen? A neighborhood, venue idea, or Messages location share is enough.";
     case "capacity":
-      return "How many people should we aim for?";
+      return "How many people feels right for this?";
     case "guestListRaw":
-      return "Who should get the invite? Send names, phone numbers, or a rough guest list.";
+      return "Who should I invite first? Send a few names/numbers, or say “draft first” if you want copy before the list.";
     default:
       return "What detail should I add next?";
   }
