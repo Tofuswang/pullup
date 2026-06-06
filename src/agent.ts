@@ -19,7 +19,7 @@ import {
   nextBriefQuestion,
   trace,
 } from "./agents/specialists";
-import { runCommonGroundAgent } from "./commonground";
+import { isCommonGroundProtocolActive, runCommonGroundAgent } from "./commonground";
 import { formatPlaceCandidate, searchPlaces, type PlaceCandidate } from "./maps";
 
 export type AgentInput = {
@@ -280,6 +280,8 @@ export function recordOutboundInviteMessage(invite: OutboundInvite, channel: Cha
 export async function runPullupAgent(
   input: AgentInput,
 ): Promise<AgentResponse> {
+  // Protocol-owned onboarding gets the whole turn. The general host agent only
+  // speaks when there is no clear CommonGround protocol in progress.
   const commonGroundResponse = runCommonGroundAgent(input);
   if (commonGroundResponse) return commonGroundResponse;
 
@@ -294,6 +296,12 @@ export async function runPullupAgent(
 
   if (guest && guest.rsvpStatus !== "opted_out" && !text.startsWith("/")) {
     return handleGuestReply(store, input, guest, showTrace);
+  }
+
+  if (isCommonGroundProtocolActive(input.conversationId)) {
+    return {
+      text: "Continue the CommonGround onboarding step above, or send /reset to restart.",
+    };
   }
 
   if (text === "/clear") {

@@ -156,6 +156,31 @@ describe("runPullupAgent", () => {
     expect(feedback.text).not.toContain("rate people");
   });
 
+  test("CommonGround START owns the turn and does not trigger host intake", async () => {
+    const conversationId = "iMessage:protocol-owner";
+
+    const start = await runPullupAgent(input(conversationId, "START", "imessage"));
+
+    expect(start.text).toContain("small first circle invited to CommonGround");
+    expect(start.text).toContain("Reply CONSENT");
+    expect(start.text).not.toContain("Who should this invite go to");
+    expect(start.text).not.toContain("Who should be invited");
+    expect(start.text).not.toContain("coffee / matcha meetup");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
+  test("slash start also enters CommonGround without host agent chime-in", async () => {
+    const conversationId = "iMessage:slash-start";
+
+    const start = await runPullupAgent(input(conversationId, "/start", "imessage"));
+
+    expect(start.text).toContain("small first circle invited to CommonGround");
+    expect(start.text).not.toContain("Who should this invite go to");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
+  });
+
   test("blocks send before approval, then queues approved small-batch invites", async () => {
     await completeEventBrief();
 

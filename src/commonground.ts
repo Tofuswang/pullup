@@ -183,8 +183,12 @@ export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefin
   }
 }
 
+export function isCommonGroundProtocolActive(conversationId: string): boolean {
+  return states.has(conversationId);
+}
+
 function startsCommonGroundFlow(text: string): boolean {
-  return ["start", "commonground", "join commonground"].includes(text);
+  return ["/start", "start", "commonground", "join commonground", "start commonground"].includes(text);
 }
 
 function invitationMessage(): string {
