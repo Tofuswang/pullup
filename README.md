@@ -98,6 +98,9 @@ Host commands:
 
 ## Agent design
 
+See `docs/commonground-business-flow-v2.md` for the current CommonGround V2
+business flow mapped to the GitHub code infrastructure.
+
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
 handoffs, shared data objects, and MVP build milestones.
 
