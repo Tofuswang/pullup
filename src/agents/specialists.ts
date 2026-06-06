@@ -43,7 +43,7 @@ export function nextBriefQuestion(field: keyof EventBrief): string {
     case "reserveSpotCta":
       return "What should the CTA be: save a seat, RSVP, apply, or something else?";
     case "venueOrLocation":
-      return "Where is it happening? A venue, city, or online link placeholder works.";
+      return "Share your current/live location in Messages, or send a venue / Apple Maps link if you already chose one. You do not need to type a neighborhood.";
     case "capacity":
       return "How many people should we aim for?";
     case "guestListRaw":

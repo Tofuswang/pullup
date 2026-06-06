@@ -16,7 +16,8 @@ export function iosLocalHandoffInstructions(): string {
     "For the iPhone-native parts:",
     "",
     `Venue Apple Maps: ${appleMapsSearchUrl("quiet cafe near Da'an Taipei")}`,
-    "Location status: when you’re on the way, you can share live location in Messages or just text ARRIVED.",
+    "Location: use Messages to share your current/live location when you want me to coordinate around where you are. You do not need to type a neighborhood.",
+    "Arrival status: when you’re there, text ARRIVED.",
     "Contacts: only share a contact card or phone/email if you want me to invite someone. I won’t read your iPhone Contacts.",
   ].join("\n");
 }

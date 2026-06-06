@@ -70,6 +70,30 @@ describe("runPullupAgent", () => {
     expect(draft.text).toContain("/approve");
   });
 
+  test("does not ask for typed location on first coffee meetup message", async () => {
+    const response = await runPullupAgent(
+      input("test:no-location-first", "plan a coffee meetup"),
+    );
+
+    expect(response.text).toContain("When is it happening?");
+    expect(response.text.toLowerCase()).not.toContain("city");
+    expect(response.text.toLowerCase()).not.toContain("neighborhood");
+  });
+
+  test("uses iOS location handoff when the venue field is missing", async () => {
+    await sendHost("Coffee meetup tomorrow, in-person, 4 people");
+    await sendHost("free");
+    await sendHost("NTU students and alumni");
+    await sendHost("Meet thoughtful people without swiping");
+    await sendHost("They will learn who is building interesting projects nearby");
+    await sendHost("They will have structured coffee conversations");
+
+    const locationPrompt = await sendHost("RSVP yes");
+
+    expect(locationPrompt.text).toContain("Share your current/live location in Messages");
+    expect(locationPrompt.text).toContain("You do not need to type a neighborhood");
+  });
+
   test("blocks send before approval, then queues approved small-batch invites", async () => {
     await completeEventBrief();
 

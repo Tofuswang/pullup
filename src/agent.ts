@@ -127,8 +127,10 @@ async function reply(
   context: ReplyContext,
   options: { showTrace: boolean; outboundInvites?: OutboundInvite[] },
 ): Promise<AgentResponse> {
-  const llm = llmOverride ?? defaultLlm();
-  const generatedText = await llm.generateReply(context);
+  const generatedText =
+    !llmOverride && shouldUseScriptedReply(context.intent)
+      ? context.fallback
+      : await (llmOverride ?? defaultLlm()).generateReply(context);
   const text = options.showTrace
     ? `${formatTrace(context.trace)}${generatedText}`
     : generatedText;
@@ -137,6 +139,18 @@ async function reply(
     text,
     outboundInvites: options.outboundInvites,
   };
+}
+
+function shouldUseScriptedReply(intent: ReplyContext["intent"]): boolean {
+  return [
+    "host_intake",
+    "draft",
+    "approve",
+    "send",
+    "status",
+    "reset",
+    "guest_rsvp",
+  ].includes(intent);
 }
 
 export function setPullupLlmForTesting(llm: PullupLlm | undefined): void {
