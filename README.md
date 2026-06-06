@@ -58,6 +58,30 @@ PULLUP_PROVIDERS=both bun start
 The product logic lives in `src/agent.ts`. Keep channel-specific concerns in
 `src/index.ts` so the same agent can run in the TUI while iMessage is flaky.
 
+## CommonGround member flow
+
+Text `START` to enter the CommonGround onboarding and room recommendation demo.
+
+Flow:
+
+```text
+START
+CONSENT
+https://www.linkedin.com/in/your-profile/
+[paste AI Passport summary]
+APPROVE
+[send preferences: intent, availability, budget, radius, alcohol comfort, group size, contact boundary]
+YES
+Thu 7:30 PM, Sat 3 PM
+CONFIRM ROOM
+[post-event vibe feedback]
+```
+
+This flow asks for LinkedIn as a true-person verification handle only, asks for
+an AI Passport, converts approved information into a demo room recommendation,
+then sends a Context Card, iPhone Calendar-ready event card, Apple Maps link, and
+vibe feedback prompt.
+
 The MVP persists event, guest, approval, message, and agent-task state in
 SQLite. By default the local database is `./data/pullup.sqlite`; override it
 with `PULLUP_DB_PATH`.

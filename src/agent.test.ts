@@ -94,6 +94,64 @@ describe("runPullupAgent", () => {
     expect(locationPrompt.text).toContain("You do not need to type a neighborhood");
   });
 
+  test("runs CommonGround onboarding from invite to room confirmation", async () => {
+    const conversationId = "iMessage:commonground-user";
+
+    const start = await runPullupAgent(input(conversationId, "START", "imessage"));
+    expect(start.text).toContain("small first circle invited to CommonGround");
+    expect(start.text).toContain("Reply CONSENT");
+
+    const consent = await runPullupAgent(input(conversationId, "CONSENT", "imessage"));
+    expect(consent.text).toContain("LinkedIn URL");
+    expect(consent.text).toContain("true-person verification");
+
+    const linkedin = await runPullupAgent(
+      input(conversationId, "https://www.linkedin.com/in/vivian-chao-9a0b54198/", "imessage"),
+    );
+    expect(linkedin.text).toContain("Verified as a consented identity handle");
+    expect(linkedin.text).toContain("AI Passport");
+
+    const passport = await runPullupAgent(
+      input(
+        conversationId,
+        "I am an ambivert with extroverted curiosity. I enjoy AI tools, startups, finance, psychology, books, city walks, quiet cafes, thoughtful conversation, and low-pressure first meetings. Avoid loud bars, forced networking, and contact exchange before mutual comfort.",
+        "imessage",
+      ),
+    );
+    expect(passport.text).toContain("plain-language matching preview");
+    expect(passport.text).toContain("Reply APPROVE");
+
+    const approved = await runPullupAgent(input(conversationId, "APPROVE", "imessage"));
+    expect(approved.text).toContain("explicit preferences");
+    expect(approved.text).toContain("availability");
+
+    const preferences = await runPullupAgent(
+      input(
+        conversationId,
+        "open to dating/social, Thu evening or Sun afternoon, NT$800-1500, Da'an/Xinyi, no alcohol-heavy first meet, group of 4, contact exchange only after mutual comfort",
+        "imessage",
+      ),
+    );
+    expect(preferences.text).toContain("Your weekly room drop is ready");
+    expect(preferences.text).toContain("People: you +");
+    expect(preferences.text).toContain("Reply YES, MAYBE, or SKIP");
+
+    const yes = await runPullupAgent(input(conversationId, "YES", "imessage"));
+    expect(yes.text).toContain("Check your iPhone Calendar");
+
+    const slot = await runPullupAgent(input(conversationId, "Thu 7:30 PM, Sat 3 PM", "imessage"));
+    expect(slot.text).toContain("Reply CONFIRM ROOM");
+
+    const confirmed = await runPullupAgent(input(conversationId, "CONFIRM ROOM", "imessage"));
+    expect(confirmed.text).toContain("Room confirmed");
+    expect(confirmed.text).toContain("Calendar event ready");
+    expect(confirmed.text).toContain("maps.apple.com");
+
+    const feedback = await runPullupAgent(input(conversationId, "looks good", "imessage"));
+    expect(feedback.text).toContain("Vibe feedback");
+    expect(feedback.text).not.toContain("rate people");
+  });
+
   test("blocks send before approval, then queues approved small-batch invites", async () => {
     await completeEventBrief();
 

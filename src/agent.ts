@@ -17,6 +17,7 @@ import {
   nextBriefQuestion,
   trace,
 } from "./agents/specialists";
+import { runCommonGroundAgent } from "./commonground";
 import { formatPlaceCandidate, searchPlaces, type PlaceCandidate } from "./maps";
 
 export type AgentInput = {
@@ -185,6 +186,9 @@ export function recordOutboundInviteMessage(invite: OutboundInvite, channel: Cha
 export async function runPullupAgent(
   input: AgentInput,
 ): Promise<AgentResponse> {
+  const commonGroundResponse = runCommonGroundAgent(input);
+  if (commonGroundResponse) return commonGroundResponse;
+
   const store = getStore();
   const text = input.text.trim();
   const phone = phoneFromConversation(input.conversationId);
