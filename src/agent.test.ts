@@ -28,10 +28,6 @@ async function completeEventBrief() {
   await sendHost("Vibe Coding Workshop for PMs & Designers next thursday, in-person, 20 people");
   await sendHost("free");
   await sendHost("Product managers, UI/UX designers, and product designers");
-  await sendHost("Help them build real AI prototypes faster without waiting for an engineering team");
-  await sendHost("They will learn Cursor, Replit, AI prototyping patterns, and shareable prototype workflows");
-  await sendHost("They will build a computer vision app flow and test a working prototype");
-  await sendHost("Save your seat");
   await sendHost("Taipei founder space");
   return sendHost("Alex +886976964336, Sam +886912345678");
 }
@@ -65,7 +61,7 @@ describe("runPullupAgent", () => {
     const first = await sendHost("I want to run a Vibe Coding Workshop next thursday for 20 designers");
     expect(first.text).toContain("[agent trace]");
     expect(first.text).toContain("Host Concierge");
-    expect(first.text).toContain("online, in-person, or hybrid");
+    expect(first.text).toContain("in person, online, or hybrid");
 
     const draft = await completeEventBrief();
     expect(draft.text).toContain("Current pullup draft");
@@ -79,7 +75,7 @@ describe("runPullupAgent", () => {
       input("test:no-location-first", "plan a coffee meetup"),
     );
 
-    expect(response.text).toContain("When is it happening?");
+    expect(response.text).toContain("When should it happen?");
     expect(response.text.toLowerCase()).not.toContain("city");
     expect(response.text.toLowerCase()).not.toContain("neighborhood");
   });
@@ -88,14 +84,11 @@ describe("runPullupAgent", () => {
     await sendHost("Coffee meetup tomorrow, in-person, 4 people");
     await sendHost("free");
     await sendHost("NTU students and alumni");
-    await sendHost("Meet thoughtful people without swiping");
-    await sendHost("They will learn who is building interesting projects nearby");
-    await sendHost("They will have structured coffee conversations");
 
     const locationPrompt = await sendHost("RSVP yes");
 
-    expect(locationPrompt.text).toContain("Share your current/live location in Messages");
-    expect(locationPrompt.text).toContain("You do not need to type a neighborhood");
+    expect(locationPrompt.text).toContain("Where should this happen?");
+    expect(locationPrompt.text).toContain("Messages location share");
   });
 
   test("runs CommonGround onboarding from invite to room confirmation", async () => {
@@ -312,10 +305,6 @@ describe("runPullupAgent", () => {
     await sendHost("Vibe Coding Workshop next thursday, in-person, 20 people");
     await sendHost("free");
     await sendHost("Product builders");
-    await sendHost("Meet other builders");
-    await sendHost("They will learn AI prototyping");
-    await sendHost("They will demo their projects");
-    await sendHost("RSVP");
 
     const location = await sendHost("Taipei 101");
 

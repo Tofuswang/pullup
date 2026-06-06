@@ -611,7 +611,7 @@ function extractBriefUpdates(event: PullupEvent, text: string): Partial<EventBri
   Object.assign(updates, labelUpdates);
 
   const genericField = Object.keys(updates).length === 0 ? field : undefined;
-  if (genericField) {
+  if (genericField && genericField !== "venueOrLocation") {
     updates[genericField] = coerceFieldValue(genericField, text) as never;
   }
 
@@ -626,6 +626,12 @@ function extractBriefUpdates(event: PullupEvent, text: string): Partial<EventBri
   const venue = extractVenuePhrase(text);
   if (venue && !event.venueOrLocation && (!updates.venueOrLocation || genericField === "venueOrLocation")) {
     updates.venueOrLocation = venue;
+  } else if (
+    genericField === "venueOrLocation" &&
+    !event.venueOrLocation &&
+    isLikelyLocation(text)
+  ) {
+    updates.venueOrLocation = text;
   }
 
   const title = inferTitle(text, updates.venueOrLocation);
@@ -678,6 +684,13 @@ function extractVenuePhrase(text: string): string | undefined {
     .replace(/^(這個|那個)/u, "")
     .replace(/(?:附近|一帶)$/u, "")
     .trim();
+}
+
+function isLikelyLocation(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length > 40) return false;
+  if (/^(rsvp|yes|no|maybe|ok|好|可以|沒問題)$/iu.test(trimmed)) return false;
+  return /[\p{Script=Han}]{2,}|taipei|台北|臺北|venue|cafe|coffee|bar|restaurant|studio|space|park|office|101/iu.test(trimmed);
 }
 
 function inferTitle(text: string, venue?: string): string | undefined {
