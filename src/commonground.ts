@@ -1,4 +1,4 @@
-import type { AgentInput, AgentResponse } from "./agent";
+import type { AgentInput, AgentResponse } from "./domain";
 import { appleMapsSearchUrl, formatIphoneCalendarEventCard } from "./ios";
 
 type CommonGroundStep =

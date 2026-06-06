@@ -9,6 +9,7 @@ import {
   type AgentResponse,
 } from "./agent";
 import type { OutboundInvite } from "./domain";
+import { sendFailureStatusFromError } from "./harness/policies";
 
 const providerMode = process.env.PULLUP_PROVIDERS ?? "terminal";
 const telemetryEnabled = process.env.PULLUP_SPECTRUM_TELEMETRY !== "0";
@@ -95,10 +96,7 @@ async function sendOneInvite(invite: OutboundInvite): Promise<void> {
     recordInviteSendResult(invite.guestId, "sent");
     console.log(`[pullup] invite sent guest=${invite.guestId}`);
   } catch (error) {
-    const details = error instanceof Error ? error.message : String(error);
-    const status = details.includes("Target not allowed")
-      ? "target_not_allowed"
-      : "failed";
+    const status = sendFailureStatusFromError(error);
     recordInviteSendResult(invite.guestId, status);
     console.error(`[pullup] invite failed guest=${invite.guestId} status=${status}`);
   }

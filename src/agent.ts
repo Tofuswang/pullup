@@ -1,18 +1,18 @@
 import OpenAI from "openai";
 import type {
+  AgentInput,
+  AgentResponse,
   AgentTraceStep,
   Channel,
   EventBrief,
   Guest,
-  GuestStatus,
-  MessageLog,
   OutboundInvite,
   PullupEvent,
+  SendResultStatus,
 } from "./domain";
 import { PullupStore } from "./store/sqlite";
 import {
   buildInviteDraft,
-  classifyRsvp,
   formatDraft,
   formatStatus,
   missingBriefFields,
@@ -21,42 +21,16 @@ import {
 } from "./agents/specialists";
 import { isCommonGroundProtocolActive, runCommonGroundAgent } from "./commonground";
 import { formatPlaceCandidate, searchPlaces, type PlaceCandidate } from "./maps";
+import { buildAgentContext, buildAgentMemory } from "./harness/context";
+import {
+  canSendInvites,
+  classifyGuestReply,
+  inviteBatchLimit,
+} from "./harness/policies";
+import { routeAgentInput } from "./harness/router";
+import type { AgentContext, ReplyContext } from "./harness/types";
 
-export type AgentInput = {
-  conversationId: string;
-  text: string;
-  channel: Channel;
-};
-
-export type AgentResponse = {
-  text: string;
-  outboundInvites?: OutboundInvite[];
-};
-
-type AgentMemory = {
-  eventBrief: string;
-  guestSummary: string;
-  recentMessages: string;
-};
-
-type ReplyContext = {
-  event?: PullupEvent;
-  guest?: Guest;
-  memory?: AgentMemory;
-  userText: string;
-  fallback: string;
-  intent:
-    | "host_intake"
-    | "clear"
-    | "draft"
-    | "approve"
-    | "send"
-    | "status"
-    | "reset"
-    | "guest_rsvp"
-    | "error";
-  trace: AgentTraceStep[];
-};
+export type { AgentInput, AgentResponse };
 
 export type PullupLlm = {
   generateReply: (context: ReplyContext) => Promise<string>;
@@ -175,76 +149,7 @@ function withMemory(context: ReplyContext): ReplyContext {
 
   return {
     ...context,
-    memory: {
-      eventBrief: formatEventMemory(context.event),
-      guestSummary: formatGuestMemory(guests),
-      recentMessages: formatMessageMemory(messages),
-    },
-  };
-}
-
-function formatEventMemory(event: PullupEvent): string {
-  return [
-    `Status: ${event.status}`,
-    `Title: ${event.title ?? "missing"}`,
-    `Date: ${event.date ?? "missing"}`,
-    `Format: ${event.format ?? "missing"}`,
-    `Cost: ${event.cost ?? "missing"}`,
-    `Audience: ${event.audience ?? "missing"}`,
-    `Why join: ${event.whyJoin ?? "missing"}`,
-    `What attendees learn: ${event.whatAttendeesLearn ?? "missing"}`,
-    `What attendees build/do: ${event.whatAttendeesBuildOrDo ?? "missing"}`,
-    `CTA: ${event.reserveSpotCta ?? "missing"}`,
-    `Venue/location: ${event.venueOrLocation ?? "missing"}`,
-    `Capacity: ${event.capacity ?? "missing"}`,
-    `Guest list raw: ${event.guestListRaw ?? "missing"}`,
-    `Invite draft: ${event.inviteDraft ?? "missing"}`,
-  ].join("\n");
-}
-
-function formatGuestMemory(guests: Guest[]): string {
-  if (guests.length === 0) return "No guests yet.";
-  const summary = guests.reduce(
-    (counts, guest) => {
-      counts[guest.rsvpStatus] += 1;
-      return counts;
-    },
-    emptyGuestSummary(),
-  );
-  const sample = guests
-    .slice(0, 8)
-    .map((guest) => `${guest.name ?? guest.phone ?? "unknown"}: rsvp=${guest.rsvpStatus}, send=${guest.sendStatus}`)
-    .join("\n");
-  return [
-    `Total guests: ${guests.length}`,
-    `Confirmed: ${summary.confirmed}`,
-    `Maybe: ${summary.maybe}`,
-    `Declined: ${summary.declined}`,
-    `Interested: ${summary.interested}`,
-    `Invited: ${summary.invited}`,
-    `Opted out: ${summary.opted_out}`,
-    sample,
-  ].filter(Boolean).join("\n");
-}
-
-function formatMessageMemory(messages: MessageLog[]): string {
-  if (messages.length === 0) return "No recent messages.";
-  return messages
-    .map((message) => `${message.direction}/${message.channel}: ${message.body}`)
-    .join("\n");
-}
-
-function emptyGuestSummary(): Record<GuestStatus, number> {
-  return {
-    not_invited: 0,
-    invited: 0,
-    interested: 0,
-    confirmed: 0,
-    declined: 0,
-    maybe: 0,
-    send_failed_target_not_allowed: 0,
-    opted_out: 0,
-    needs_human: 0,
+    memory: buildAgentMemory(context.event, guests, messages),
   };
 }
 
@@ -262,7 +167,7 @@ export function setPullupMapsForTesting(maps: PullupMaps | undefined): void {
 
 export function recordInviteSendResult(
   guestId: string,
-  status: "sent" | "target_not_allowed" | "failed",
+  status: SendResultStatus,
 ): void {
   getStore().markInviteSendResult(guestId, status);
 }
@@ -286,16 +191,15 @@ export async function runPullupAgent(
   if (commonGroundResponse) return commonGroundResponse;
 
   const store = getStore();
-  const text = input.text.trim();
-  const phone = phoneFromConversation(input.conversationId);
-  const guest = phone ? store.findGuestByPhone(phone) : undefined;
+  const context = routeAgentInput(buildAgentContext(input, store));
+  const { text, guest } = context;
   const showTrace =
     input.channel === "terminal"
       ? process.env.PULLUP_SHOW_AGENT_TRACE !== "0"
       : process.env.PULLUP_SHOW_AGENT_TRACE === "1" && !guest;
 
-  if (guest && guest.rsvpStatus !== "opted_out" && !text.startsWith("/")) {
-    return handleGuestReply(store, input, guest, showTrace);
+  if (context.route === "guest_rsvp" && guest) {
+    return handleGuestReply(store, context, showTrace);
   }
 
   if (isCommonGroundProtocolActive(input.conversationId)) {
@@ -304,18 +208,19 @@ export async function runPullupAgent(
     };
   }
 
-  if (text === "/clear") {
+  if (context.command === "clear") {
     return {
       text: `${input.channel === "terminal" ? "\x1b[2J\x1b[H" : ""}Cleared. Your current pullup draft is still here; use /reset if you want to start over.`,
     };
   }
 
-  if (text === "/reset") {
-    const event = store.getActiveEventForHost(input.conversationId);
+  if (context.command === "reset") {
+    const event = context.event;
     if (event) store.updateEvent(event.id, { status: "cancelled" });
     return reply(
       {
         event,
+        memory: context.memory,
         userText: text,
         intent: "reset",
         trace: trace({
@@ -328,7 +233,7 @@ export async function runPullupAgent(
     );
   }
 
-  const event = store.getOrCreateDraftEvent(input.conversationId);
+  const event = context.event ?? store.getOrCreateDraftEvent(input.conversationId);
   store.logMessage({
     eventId: event.id,
     conversationId: input.conversationId,
@@ -336,11 +241,16 @@ export async function runPullupAgent(
     channel: input.channel,
     body: text,
   });
+  const memory = buildAgentMemory(
+    event,
+    store.listGuests(event.id),
+    store.listRecentMessages(event.id, 10),
+  );
 
-  if (text === "/draft") return showDraft(store, event, text, showTrace);
-  if (text === "/approve") return approveDraft(store, event, text, showTrace);
-  if (text === "/send") return queueInvites(store, event, text, showTrace);
-  if (text === "/status") return showStatus(store, event, text, showTrace);
+  if (context.command === "draft") return showDraft(store, event, text, showTrace, memory);
+  if (context.command === "approve") return approveDraft(store, event, text, showTrace, memory);
+  if (context.command === "send") return queueInvites(store, event, text, showTrace, memory);
+  if (context.command === "status") return showStatus(store, event, text, showTrace, memory);
 
   return continueHostIntake(store, event, text, showTrace);
 }
@@ -475,10 +385,12 @@ async function showDraft(
   event: PullupEvent,
   text: string,
   showTrace: boolean,
+  memory = buildAgentMemory(event, store.listGuests(event.id), store.listRecentMessages(event.id, 10)),
 ): Promise<AgentResponse> {
   return reply(
     {
       event,
+      memory,
       userText: text,
       intent: "draft",
       trace: trace({
@@ -496,11 +408,13 @@ async function approveDraft(
   event: PullupEvent,
   text: string,
   showTrace: boolean,
+  memory = buildAgentMemory(event, store.listGuests(event.id), store.listRecentMessages(event.id, 10)),
 ): Promise<AgentResponse> {
   if (!event.inviteDraft) {
     return reply(
       {
         event,
+        memory,
         userText: text,
         intent: "approve",
         trace: trace({
@@ -517,6 +431,7 @@ async function approveDraft(
   return reply(
     {
       event: approved,
+      memory: buildAgentMemory(approved, store.listGuests(approved.id), store.listRecentMessages(approved.id, 10)),
       userText: text,
       intent: "approve",
       trace: trace({
@@ -534,24 +449,24 @@ async function queueInvites(
   event: PullupEvent,
   text: string,
   showTrace: boolean,
+  memory = buildAgentMemory(event, store.listGuests(event.id), store.listRecentMessages(event.id, 10)),
 ): Promise<AgentResponse> {
-  if (event.status !== "approved") {
+  const sendPolicy = canSendInvites(event.status);
+  if (!sendPolicy.allow) {
     return reply(
       {
         event,
+        memory,
         userText: text,
         intent: "send",
-        trace: trace({
-          agent: "Safety & Trust",
-          action: "Block outbound because host has not approved the draft.",
-        }),
-        fallback: "I can't send yet. Please review the invite and reply /approve first.",
+        trace: trace(sendPolicy.trace!),
+        fallback: sendPolicy.fallback!,
       },
       { showTrace },
     );
   }
 
-  const limit = Number.parseInt(process.env.PULLUP_MAX_INVITES_PER_BATCH ?? "20", 10);
+  const limit = inviteBatchLimit();
   const guests = store
     .listGuests(event.id)
     .filter((guest) => guest.phone && guest.sendStatus === "not_invited")
@@ -569,6 +484,7 @@ async function queueInvites(
   return reply(
     {
       event,
+      memory,
       userText: text,
       intent: "send",
       trace: trace(
@@ -594,10 +510,12 @@ async function showStatus(
   event: PullupEvent,
   text: string,
   showTrace: boolean,
+  memory = buildAgentMemory(event, store.listGuests(event.id), store.listRecentMessages(event.id, 10)),
 ): Promise<AgentResponse> {
   return reply(
     {
       event,
+      memory,
       userText: text,
       intent: "status",
       trace: trace({
@@ -612,11 +530,12 @@ async function showStatus(
 
 async function handleGuestReply(
   store: PullupStore,
-  input: AgentInput,
-  guest: Guest,
+  context: AgentContext,
   showTrace: boolean,
 ): Promise<AgentResponse> {
-  const rsvp = classifyRsvp(input.text) ?? "needs_human";
+  const guest = context.guest!;
+  const input = context.input;
+  const rsvp = classifyGuestReply(input.text);
   const updatedGuest = store.updateGuestStatus(guest.id, {
     rsvpStatus: rsvp,
   });
@@ -636,6 +555,9 @@ async function handleGuestReply(
     {
       event,
       guest: updatedGuest,
+      memory: event
+        ? buildAgentMemory(event, store.listGuests(event.id), store.listRecentMessages(event.id, 10))
+        : context.memory,
       userText: input.text,
       intent: "guest_rsvp",
       trace: trace({
@@ -802,9 +724,4 @@ function parseGuests(raw?: string): Array<{ name?: string; phone?: string; segme
     }
   }
   return guests;
-}
-
-function phoneFromConversation(conversationId: string): string | undefined {
-  const match = conversationId.match(/(\+\d{8,})$/);
-  return match?.[1];
 }
