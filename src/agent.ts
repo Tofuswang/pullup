@@ -17,6 +17,7 @@ import {
   nextBriefQuestion,
   trace,
 } from "./agents/specialists";
+import { formatPlaceCandidate, searchPlaces, type PlaceCandidate } from "./maps";
 
 export type AgentInput = {
   conversationId: string;
@@ -36,6 +37,7 @@ type ReplyContext = {
   fallback: string;
   intent:
     | "host_intake"
+    | "clear"
     | "draft"
     | "approve"
     | "send"
@@ -50,7 +52,12 @@ export type PullupLlm = {
   generateReply: (context: ReplyContext) => Promise<string>;
 };
 
+export type PullupMaps = {
+  searchPlaces: (query: string) => Promise<PlaceCandidate[]>;
+};
+
 let llmOverride: PullupLlm | undefined;
+let mapsOverride: PullupMaps | undefined;
 let storeOverride: PullupStore | undefined;
 let openaiClient: OpenAI | undefined;
 
@@ -140,6 +147,10 @@ export function setPullupStoreForTesting(store: PullupStore | undefined): void {
   storeOverride = store;
 }
 
+export function setPullupMapsForTesting(maps: PullupMaps | undefined): void {
+  mapsOverride = maps;
+}
+
 export function recordInviteSendResult(
   guestId: string,
   status: "sent" | "target_not_allowed" | "failed",
@@ -171,6 +182,12 @@ export async function runPullupAgent(
 
   if (guest && guest.rsvpStatus !== "opted_out" && !text.startsWith("/")) {
     return handleGuestReply(store, input, guest, showTrace);
+  }
+
+  if (text === "/clear") {
+    return {
+      text: `${input.channel === "terminal" ? "\x1b[2J\x1b[H" : ""}Cleared. Your current pullup draft is still here; use /reset if you want to start over.`,
+    };
   }
 
   if (text === "/reset") {
@@ -214,7 +231,11 @@ async function continueHostIntake(
   text: string,
   showTrace: boolean,
 ): Promise<AgentResponse> {
-  let updated = store.updateEvent(event.id, extractBriefUpdates(event, text));
+  const updates = extractBriefUpdates(event, text);
+  let updated = store.updateEvent(event.id, updates);
+  const venueLookup = await maybeEnrichVenue(store, updated, updates);
+  if (venueLookup?.event) updated = venueLookup.event;
+
   const guests = parseGuests(updated.guestListRaw);
   if (guests.length > 0) {
     store.replaceGuests(updated.id, guests);
@@ -271,15 +292,62 @@ async function continueHostIntake(
           agent: "Host Concierge",
           action: "Capture host input and update the event brief.",
         },
-        {
-          agent: "Event Strategist",
-          action: `Identify next missing Linear template field: ${nextField}.`,
-        },
-      ),
-      fallback: nextBriefQuestion(nextField),
-    },
-    { showTrace },
-  );
+          {
+            agent: "Event Strategist",
+            action: `Identify next missing Linear template field: ${nextField}.`,
+          },
+          ...(venueLookup
+            ? [
+                {
+                  agent: "Venue Scout" as const,
+                  action: venueLookup.summary,
+                },
+              ]
+            : []),
+        ),
+        fallback: [
+          venueLookup?.replyPrefix,
+          nextBriefQuestion(nextField),
+        ].filter(Boolean).join("\n\n"),
+      },
+      { showTrace },
+    );
+}
+
+async function maybeEnrichVenue(
+  store: PullupStore,
+  event: PullupEvent,
+  updates: Partial<EventBrief>,
+): Promise<{ event: PullupEvent; summary: string; replyPrefix: string } | undefined> {
+  const query = updates.venueOrLocation?.trim();
+  if (!query || event.format === "online") return undefined;
+
+  const maps = mapsOverride ?? { searchPlaces: (placeQuery: string) => searchPlaces(placeQuery) };
+  try {
+    const candidates = await maps.searchPlaces(query);
+    const first = candidates[0];
+    if (!first) {
+      return {
+        event,
+        summary: `No Google Places result for "${query}".`,
+        replyPrefix: `I could not find a clear Google Places match for "${query}" yet.`,
+      };
+    }
+
+    const canonicalVenue = formatPlaceCandidate(first);
+    return {
+      event: store.updateEvent(event.id, { venueOrLocation: canonicalVenue }),
+      summary: `Resolved venue/location with Google Places: ${first.name}.`,
+      replyPrefix: `I found this venue match: ${canonicalVenue}.`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      event,
+      summary: `Google Places lookup failed: ${message}`,
+      replyPrefix: `I saved "${query}" as the location, but Google Places lookup failed for now.`,
+    };
+  }
 }
 
 async function showDraft(

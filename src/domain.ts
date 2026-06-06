@@ -62,6 +62,7 @@ export type Guest = {
 export type AgentName =
   | "Host Concierge"
   | "Event Strategist"
+  | "Venue Scout"
   | "Invite Copy"
   | "Safety & Trust"
   | "RSVP Coordinator";

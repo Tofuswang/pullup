@@ -3,6 +3,7 @@ import {
   recordInviteSendResult,
   runPullupAgent,
   setPullupLlmForTesting,
+  setPullupMapsForTesting,
   setPullupStoreForTesting,
 } from "./agent";
 import { PullupStore } from "./store/sqlite";
@@ -42,10 +43,16 @@ describe("runPullupAgent", () => {
         return context.fallback;
       },
     });
+    setPullupMapsForTesting({
+      async searchPlaces() {
+        return [];
+      },
+    });
   });
 
   afterEach(() => {
     setPullupLlmForTesting(undefined);
+    setPullupMapsForTesting(undefined);
     setPullupStoreForTesting(undefined);
     store.close();
   });
@@ -122,40 +129,44 @@ describe("runPullupAgent", () => {
     expect(status.text).toContain("Opted out: 1");
   });
 
-  test("loops through local iPhone Calendar availability after approval", async () => {
-    const conversationId = "test:calendar-loop";
+  test("venue intake resolves a Google Places candidate", async () => {
+    setPullupMapsForTesting({
+      async searchPlaces(query) {
+        expect(query).toBe("Taipei 101");
+        return [
+          {
+            name: "Taipei 101",
+            address: "No. 7, Section 5, Xinyi Rd, Taipei City, Taiwan 110",
+            latitude: 25.033976,
+            longitude: 121.5645389,
+          },
+        ];
+      },
+    });
 
-    await runPullupAgent(input(conversationId, "help me host a coffee meetup"));
-    await runPullupAgent(input(conversationId, "Vivian and two product friends"));
-    await runPullupAgent(input(conversationId, "cozy but useful"));
+    await sendHost("Vibe Coding Workshop next thursday, in-person, 20 people");
+    await sendHost("free");
+    await sendHost("Product builders");
+    await sendHost("Meet other builders");
+    await sendHost("They will learn AI prototyping");
+    await sendHost("They will demo their projects");
+    await sendHost("RSVP");
 
-    const calendar = await runPullupAgent(input(conversationId, "YES"));
-    expect(calendar.text).toContain("iPhone Calendar");
-    expect(calendar.text).toContain("Apple Maps");
+    const location = await sendHost("Taipei 101");
 
-    const slots = await runPullupAgent(input(conversationId, "Thu 7:30 PM, Sat 3 PM"));
-    expect(slots.text).toContain("I found a few windows");
-    expect(slots.text).toContain("Reply 1, 2, or 3");
-
-    const selected = await runPullupAgent(input(conversationId, "1"));
-    expect(selected.text).toContain("Reply CREATE HOLD");
-
-    const created = await runPullupAgent(input(conversationId, "CREATE HOLD"));
-    expect(created.text).toContain("Local room hold prepared");
-    expect(created.text).toContain("maps.apple.com");
+    expect(location.text).toContain("I found this venue match");
+    expect(location.text).toContain("Taipei 101");
+    expect(location.text).toContain("25.033976");
   });
 
-  test("requires explicit event creation after slot selection", async () => {
-    const conversationId = "test:calendar-approval";
+  test("clear clears terminal output without resetting the event", async () => {
+    await sendHost("Vibe Coding Workshop next thursday");
 
-    await runPullupAgent(input(conversationId, "plan a dinner"));
-    await runPullupAgent(input(conversationId, "friends"));
-    await runPullupAgent(input(conversationId, "low key"));
-    await runPullupAgent(input(conversationId, "YES"));
-    await runPullupAgent(input(conversationId, "Thu 7:30 PM, Sat 3 PM"));
-    await runPullupAgent(input(conversationId, "1"));
+    const clear = await sendHost("/clear");
+    expect(clear.text).toStartWith("\x1b[2J\x1b[H");
+    expect(clear.text).toContain("still here");
 
-    const response = await runPullupAgent(input(conversationId, "ok"));
-    expect(response.text).toContain("No hold is created yet");
+    const draft = await sendHost("/draft");
+    expect(draft.text).toContain("Vibe Coding Workshop");
   });
 });
