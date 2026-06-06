@@ -1,0 +1,14 @@
+Thesis: CommonGround is a consent-first recommender for designing the first offline hour, implemented today as a Spectrum/iMessage demo with an honest path to native iOS.
+Audience: hackathon judges, cofounder, demo viewers
+One-line arc: The product moves from trusted onboarding to AI Passport signals to room recommendation to local iOS scheduling and feedback learning.
+
+01 Cover: CommonGround recommends a room, not a person. Proof: product tagline + implementation badges.
+02 Problem: social apps optimize browsing, not showing up. Proof: friction ladder from thin profiles to offline coordination.
+03 Demo flow: the repo now supports a complete member journey. Proof: START -> feedback state machine.
+04 Trust architecture: data sources are separated before matching. Proof: permissioned data layers.
+05 Recommender engine: matching is multi-signal room design. Proof: dyadic/group/experience score stack.
+06 Room output: Context Card turns private input into safe social context. Proof: sample room card.
+07 Scheduling loop: local iOS handoff finds mutual windows without reading calendars. Proof: free-window overlap diagram.
+08 Implementation map: Spectrum agent routes CommonGround and host flows cleanly. Proof: code module architecture.
+09 Methodology map: demo is honest about MVP vs planned-native work. Proof: implemented/simulated/future matrix.
+10 Demo script + ask: run the exact live flow and merge PR branch. Proof: command sequence + next build milestones.

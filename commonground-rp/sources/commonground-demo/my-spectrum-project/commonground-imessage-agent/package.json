@@ -1,0 +1,26 @@
+{
+  "name": "commonground-imessage-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx index.ts",
+    "typecheck": "tsc --noEmit",
+    "check:env": "node --input-type=module -e \"import dotenv from 'dotenv'; dotenv.config({ override: true }); const o=process.env.OPENAI_API_KEY||''; const s=process.env.PROJECT_SECRET||''; console.log({ photonSecretLoaded: !!s, photonSecretStartsWrong: s.startsWith('read'), openaiKeyLoaded: !!o, openaiKeyPrefix: o ? o.slice(0,7) : '', openaiModel: process.env.OPENAI_MODEL })\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "openai": "latest",
+    "spectrum-ts": "^1.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3"
+  }
+}

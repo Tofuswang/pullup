@@ -1,0 +1,16 @@
+{
+  "name": "commonground-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "python3 run_demo.py",
+    "spectrum:dev": "tsx photon_agent_stub.ts"
+  },
+  "dependencies": {
+    "spectrum-ts": "latest"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,2 @@
+"""CommonGround hackathon demo package."""
+
