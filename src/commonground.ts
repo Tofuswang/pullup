@@ -8,6 +8,7 @@ import {
   type MutualSlot,
   type RoomRecommendation,
 } from "./commonground_recommender";
+import { formatMethodologyMvpMap } from "./methodology_map";
 
 type CommonGroundStep =
   | "invited"
@@ -38,6 +39,10 @@ export function runCommonGroundAgent(input: AgentInput): AgentResponse | undefin
   const cleanText = cleanUserText(text);
   const normalized = cleanText.toLowerCase();
   const state = states.get(input.conversationId);
+
+  if (isMethodologyRequest(normalized)) {
+    return { text: formatMethodologyMvpMap() };
+  }
 
   if (["/reset", "reset"].includes(normalized) && state) {
     states.delete(input.conversationId);
@@ -165,6 +170,10 @@ export function isCommonGroundProtocolActive(conversationId: string): boolean {
 
 function startsCommonGroundFlow(text: string): boolean {
   return ["/start", "start", "commonground", "join commonground", "start commonground"].includes(text);
+}
+
+function isMethodologyRequest(text: string): boolean {
+  return ["/methodology", "methodology", "mvp map", "methodology map"].includes(text);
 }
 
 function invitationMessage(): string {

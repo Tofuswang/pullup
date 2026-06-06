@@ -211,6 +211,17 @@ describe("runPullupAgent", () => {
     expect(store.getActiveEventForHost(conversationId)).toBeUndefined();
   });
 
+  test("methodology command returns the implemented MVP map", async () => {
+    const response = await runPullupAgent(input("iMessage:methodology", "METHODOLOGY", "imessage"));
+
+    expect(response.text).toContain("CommonGround methodology");
+    expect(response.text).toContain("LinkedIn as true-person verification only");
+    expect(response.text).toContain("Local iOS scheduling handoff");
+    expect(response.text).toContain("does not scrape LinkedIn");
+    expect(seenContexts).toHaveLength(0);
+    expect(store.getActiveEventForHost("iMessage:methodology")).toBeUndefined();
+  });
+
   test("blocks send before approval, then queues approved small-batch invites", async () => {
     await completeEventBrief();
 

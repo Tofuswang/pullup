@@ -77,6 +77,10 @@ CONFIRM ROOM
 [post-event vibe feedback]
 ```
 
+Text `METHODOLOGY` or `/methodology` to show the code-backed methodology map:
+what is implemented, what is simulated as MVP heuristic code, and what remains
+future native/ML work.
+
 This flow asks for LinkedIn as a true-person verification handle only, asks for
 an AI Passport, converts approved information into a demo room recommendation,
 then sends a Context Card, iPhone Calendar-ready event card, Apple Maps link, and
