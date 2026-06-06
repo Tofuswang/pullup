@@ -533,6 +533,8 @@ export async function runPullupAgent(
         },
       ],
       fallback: [
+        `Local room hold prepared for ${slot.label}.`,
+        "",
         formatIphoneCalendarEventCard({
           title: eventTitle,
           start: slot.start,
