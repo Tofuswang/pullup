@@ -19,7 +19,25 @@ export type CalendarEventInput = {
   attendees?: string[];
 };
 
-const localCalendarHolds = new Map<string, CalendarEventInput>();
+export type CalendarEventResult =
+  | {
+      status: "created";
+      provider: "eventkit";
+      id: string;
+      htmlLink?: string;
+      mocked: false;
+    }
+  | {
+      status: "native_required";
+      provider: "eventkit";
+      handoff: string;
+      mocked: false;
+    };
+
+export type NativeCalendarWriter = (
+  event: CalendarEventInput,
+  context: { conversationId: string },
+) => Promise<{ id: string; htmlLink?: string }>;
 
 export function localIosCalendarInstructions(): string {
   return [
@@ -83,9 +101,41 @@ export function findAvailableSlots(
 export async function createCalendarEvent(
   conversationId: string,
   event: CalendarEventInput,
-): Promise<{ id: string; htmlLink?: string; mocked: boolean }> {
-  localCalendarHolds.set(conversationId, event);
-  return { id: `local_ios_hold_${event.start.getTime()}`, mocked: true };
+  options: { nativeWriter?: NativeCalendarWriter } = {},
+): Promise<CalendarEventResult> {
+  if (event.end <= event.start) {
+    throw new Error("Calendar event end must be after start.");
+  }
+
+  if (options.nativeWriter) {
+    const created = await options.nativeWriter(event, { conversationId });
+    return {
+      status: "created",
+      provider: "eventkit",
+      id: created.id,
+      htmlLink: created.htmlLink,
+      mocked: false,
+    };
+  }
+
+  return {
+    status: "native_required",
+    provider: "eventkit",
+    handoff: eventKitNativeHandoff(event),
+    mocked: false,
+  };
+}
+
+export function eventKitNativeHandoff(event: CalendarEventInput): string {
+  return [
+    "Native EventKit write is required to create this Apple Calendar event.",
+    "",
+    "Use the iOS PullupCalendar EventKitCalendarWriter with write-only Calendar permission, then pass it as createCalendarEvent(..., { nativeWriter }).",
+    "",
+    `Title: ${event.summary}`,
+    `When: ${formatSlot(event.start)} - ${formatSlot(event.end)}`,
+    event.location ? `Location: ${event.location}` : undefined,
+  ].filter(Boolean).join("\n");
 }
 
 export function formatSlotOptions(slots: TimeSlot[]): string {

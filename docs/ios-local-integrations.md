@@ -8,12 +8,15 @@ silently read private device data.
 Use iMessage as the conversational surface and iOS handoffs for local data:
 
 - Calendar: user checks iPhone Calendar and sends free windows.
+- Calendar write: the native `ios/PullupCalendar` package can request EventKit
+  write-only access and create a confirmed Apple Calendar event on-device.
 - Maps: agent sends Apple Maps links for venue search and directions.
 - Location status: user shares live location in Messages or texts `ARRIVED`.
 - Contacts: user shares a contact card, phone, or email only when inviting someone.
 
 The Photon/Spectrum agent cannot directly read local iPhone Calendar, Contacts,
-or live location. A future native iOS app can do that after explicit permission.
+or live location. Native calendar writes happen inside the iOS app through
+EventKit after explicit write-only Calendar permission.
 
 ## User Flow
 
@@ -23,7 +26,7 @@ User replies YES
 → user sends free windows only
 → agent proposes 2-3 slots
 → user chooses 1 / 2 / 3
-→ agent prepares local room hold
+→ native iOS app creates the confirmed Calendar event with EventKit write-only access
 → agent sends Apple Maps venue link
 → attendees share ARRIVED / live location voluntarily
 → post-event vibe feedback
@@ -42,11 +45,16 @@ Thu 7:30 PM, Sat 3 PM, Sun 4:30 PM
 I only need free windows, not event names or private details.
 ```
 
+Implemented native write path:
+
+- `ios/PullupCalendar/Sources/PullupCalendar/EventKitCalendarWriter.swift`
+  requests write-only Calendar access on iOS 17+.
+- It creates confirmed events in the default writable calendar.
+- The app must include `NSCalendarsWriteOnlyAccessUsageDescription`.
+
 Future native app:
 
-- EventKit permission prompt
-- read free/busy on-device
-- create Calendar events on-device
+- read free/busy on-device after a separate full-access upgrade
 - send only availability summaries to backend
 
 ## Apple Maps
@@ -106,7 +114,8 @@ Future native app:
 
 > We dropped Google OAuth for the demo and moved to local iOS handoff. The
 > iMessage agent asks users to share only free windows from their iPhone Calendar,
-> sends Apple Maps links for venue planning, supports voluntary location status,
-> and only uses contacts the user explicitly shares. The future native iOS app
-> can replace manual sharing with EventKit, MapKit, CoreLocation, and Contacts
-> permission prompts.
+> the native iOS package can create confirmed events with EventKit write-only
+> access, sends Apple Maps links for venue planning, supports voluntary location
+> status, and only uses contacts the user explicitly shares. Full calendar
+> reading, MapKit, CoreLocation, and Contacts remain explicit future permission
+> upgrades.

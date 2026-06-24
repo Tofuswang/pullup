@@ -19,6 +19,8 @@ The shared product idea is:
 | Spectrum provider loop | `src/index.ts` |
 | Top-level routing | `src/agent.ts` |
 | CommonGround member onboarding | `src/commonground.ts` |
+| Research-style recommender module | `src/commonground_recommender.ts` |
+| Methodology / privacy mapping | `src/commonground_methodology.ts` |
 | Host event / invite / RSVP flow | `src/agent.ts` |
 | Event domain types | `src/domain.ts` |
 | Specialist copy and status formatting | `src/agents/specialists.ts` |
@@ -175,11 +177,13 @@ Current implementation:
 
 - accepts long free text
 - requires enough text length to avoid empty onboarding
-- does not parse into embeddings yet
+- converts AI Passport + explicit preferences into interpretable research signals
+- keeps an embedding-ready text field for future vector retrieval
 
 Current limitation:
 
-- matching is demo heuristic, not an embedding recommender yet
+- matching is first-pass product heuristic, not a trained embedding recommender yet
+- no persistent member profile table yet
 
 ### Step 5: Redaction + Approval
 
@@ -231,9 +235,10 @@ Current implementation:
 - stored as free text in CommonGround state
 - not yet normalized into structured fields
 
-## Demo Room Recommendation
+## Research-Style Room Recommendation
 
-After preferences, the system creates one demo room:
+After preferences, the system calls the CommonGround recommender module and creates
+one demo room:
 
 ```text
 AI x Career Transition Coffee Room
@@ -245,9 +250,14 @@ Room includes:
 - activity
 - venue style
 - why the room works
+- first-meeting quality score
+- dyadic chemistry score
+- group dynamics score
+- experience-fit score
 - shared context
 - warm-up prompts
 - boundaries
+- methodology notes
 
 Current demo people:
 
@@ -260,18 +270,77 @@ Business purpose:
 - show the core product magic quickly
 - demonstrate “room formation,” not profile browsing
 - keep the demo deterministic and judge-friendly
+- separate person fit, group fit, and activity fit instead of using one vague compatibility score
 
 Current implementation:
 
-- `buildDemoRoom()`
+- `recommendRoom()`
+- `parseResearchProfile()`
 - `contextCard()`
+- `src/commonground_recommender.test.ts`
 
 Current limitation:
 
 - people are fake seeded users
-- no real recommender retrieval yet
-- no reciprocal model yet
+- no live candidate retrieval from a member database yet
+- no trained reciprocal model yet
 - no human review queue yet
+
+## Methodology Coverage From Attached Product Notes
+
+The current code now represents the main methodology pieces at MVP-code level:
+
+| Attached Requirement | Current Code Status |
+| --- | --- |
+| iMessage integration | Spectrum provider flow in `src/index.ts` and routing in `src/agent.ts` |
+| Maps integration | Apple Maps / places handoff helpers in `src/ios.ts` and `src/maps.ts` |
+| User AI Passport / assistant that knows me | Conversational onboarding in `src/commonground.ts`; signal parsing in `src/commonground_recommender.ts` |
+| Questionnaire / conversational onboarding | Consent, LinkedIn verification, Passport, redaction, and preferences states in `src/commonground.ts` |
+| Personality / values / social mode / energy / intent / safety signals | `parseResearchProfile()` extracts interpretable MVP signals |
+| Separate dyadic, group, and experience-fit models | `recommendRoom()` returns `dyadicChemistry`, `groupDynamics`, and `experienceFit` |
+| Research-backed self-disclosure and common-ground prompts | Context Card prompts and methodology notes in `contextCard()` |
+| Group optimizer | MVP seeded group recommendation in `recommendRoom()` |
+| Pre-event brief / Context Card | `contextCard()` |
+| User + friends calendar overlap | Friend-labeled free-window parsing in `parseAvailabilityWindows()` and `findMutualSlots()` |
+| Feedback learning loop | `feedbackPrompt()` captures vibe feedback without person ratings |
+| Four-surface architecture | `productSurfaces` maps iOS app brain, iMessage, App Intents, and web fallback |
+| Minimum-permission path | `permissionLadder` defines current MVP permissions and native-app upgrade path |
+| Revocable consent ledger shape | `buildConsentLedgerEntry()` creates minimal consent records without raw data storage |
+| Meaningful second interaction metric | `scoreMeetingOutcomeFeedback()` scores attendance, natural conversation, future-interest, activity fit, mutual opt-in, and safety |
+
+Still not built as real production infrastructure:
+
+- trained ML models or real embeddings
+- persistent user taste graph
+- native iOS EventKit calendar permissions
+- automatic access to friends' calendars
+- causal experimentation framework
+- production analytics for real second-meeting outcome prediction
+
+## Native-App Architecture Boundary
+
+The latest product direction says CommonGround should feel like it lives in
+iMessage, but should be architected as a private planning system with an iOS app
+as the real assistant brain.
+
+Current repo boundary:
+
+- implemented: Spectrum/iMessage conversational MVP
+- implemented: manual local-calendar free-window sharing
+- implemented: Apple Maps URL handoff
+- implemented: privacy-safe Context Cards and vibe feedback
+- implemented: code-level architecture map in `src/commonground_methodology.ts`
+- implemented native package: EventKit write-only event creation
+- planned native: EventKit full-access conflict detection after explicit upgrade
+- planned native: CoreLocation / MapKit travel-time ranking
+- planned native: Contacts permission prompt
+- planned native: App Intents / Shortcuts
+- planned native: web fallback for friends without the app
+
+Product principle:
+
+> The bot can propose and explain. Calendar truth, location truth, and contact
+> access must come from explicit user permission or manual fallback.
 
 ## Mutual Confirmation
 
@@ -305,7 +374,9 @@ Current implementation:
 After `YES`, system asks user to check local iPhone Calendar:
 
 ```text
-Thu 7:30 PM, Sat 3 PM, Sun 4:30 PM
+you: Thu 7:30 PM, Sat 3 PM
+Mina: Thu 7:30 PM
+Ethan: Thu 7:30 PM
 ```
 
 System only asks for free windows, not calendar details.
@@ -315,18 +386,21 @@ Business purpose:
 - avoid Google Calendar OAuth for MVP
 - avoid pretending the server can read iPhone Calendar
 - keep iPhone as the local source of truth
+- support a demo loop where friends can share free windows manually
 
 Current implementation:
 
-- parses simple weekday/time text
-- chooses first available window
+- parses simple weekday/time text and friend-labeled windows
+- finds overlapping mutual windows when multiple people are provided
+- falls back to a user-only hold if only the current user's windows are provided
 - asks for `CONFIRM ROOM`
+- native `ios/PullupCalendar` package can request EventKit write-only access
+  and create the confirmed event on-device
 
 Current limitation:
 
-- no native EventKit integration
-- no multi-user free/busy merge yet
-- no automatic iOS calendar write
+- no automatic multi-user free/busy API yet
+- no full iOS app shell wired to the native package yet
 
 ## Event Confirmation
 
@@ -472,7 +546,8 @@ Current role:
 Current limitation:
 
 - no native iOS app yet
-- no EventKit, Contacts, CoreLocation, or MapKit permissions yet
+- no Contacts, CoreLocation, or MapKit permissions yet
+- no full-access EventKit permission for free/busy conflict detection yet
 
 ## What Is Built Now
 

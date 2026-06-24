@@ -77,6 +77,10 @@ CONFIRM ROOM
 [post-event vibe feedback]
 ```
 
+Text `METHODOLOGY` or `/methodology` to show the code-backed methodology map:
+what is implemented, what is simulated as MVP heuristic code, and what remains
+future native/ML work.
+
 This flow asks for LinkedIn as a true-person verification handle only, asks for
 an AI Passport, converts approved information into a demo room recommendation,
 then sends a Context Card, iPhone Calendar-ready event card, Apple Maps link, and
@@ -101,11 +105,15 @@ Host commands:
 See `docs/commonground-business-flow-v2.md` for the current CommonGround V2
 business flow mapped to the GitHub code infrastructure.
 
+See `docs/methodology-to-mvp-map.md` for the exact mapping between research
+methodology, current MVP code, and future native/ML work.
+
 See `docs/agent-architecture.md` for the planned agent team, responsibilities,
 handoffs, shared data objects, and MVP build milestones.
 
-See `docs/ios-local-integrations.md` for the local iPhone Calendar, Apple Maps,
-location status, and Contacts handoff plan.
+See `docs/ios-local-integrations.md` for the local iPhone Calendar flow,
+EventKit write-only event creation, Apple Maps, location status, and Contacts
+handoff plan.
 
 ## Collaboration
 
